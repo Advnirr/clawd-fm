@@ -301,10 +301,9 @@ function room(c: Canvas, t: number) {
   const { cols, p } = c
   for (let x = 0; x < 26; x++) c.put(x, 3, '\u2580', p.wood) // desk
   c.clawd(Math.floor(t / 2) % 2 ? TYPE_B : WALK_A, 1, 1)
-  // Laptop: a dark screen with a line of text flickering on it.
-  const line = 1 + (Math.floor(t / 3) % 3)
-  c.sprite(['ssssss', 'ssssss', 'ssssss', 'ssssss', 'kkkkkkk'], 13, 1, { s: 0x2f4a5f, k: p.dim })
-  for (let x = 14; x < 18; x++) if (noise(x, Math.floor(t / 3)) < 0.7) c.pixel(x, line + 1, 0x7f9fb3)
+  // Laptop seen from the side: keys toward Clawd, the lid tilted back, its screen lit toward him.
+  const lit = Math.floor(t / 3) % 4 ? 0x7f9fb3 : 0x9fc3dc
+  c.sprite(['......ol', '.....ol.', '.....ol.', '....ol..', 'kkkkkk..'], 11, 1, { o: lit, l: 0x6b6a64, k: p.dim })
   // Mug with steam.
   c.sprite(['ww.', 'www', 'ww.'], 22, 3, { w: 0xe8e6dc })
   c.put(22 + (Math.floor(t / 4) % 2), 1, '~', p.dim)
