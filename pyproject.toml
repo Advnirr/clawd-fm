@@ -1,0 +1,8 @@
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP", "SIM", "I", "PL", "RUF", "S"]
+# Thresholds and gaps (0.9, 120 s, ...) read better inline than as named constants.
+ignore = ["PLR2004"]

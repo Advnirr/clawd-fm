@@ -7,13 +7,19 @@ consecutive frames; the text between two pauses is stitched into one full line.
 
 Needs: yt-dlp, ffmpeg, tesseract.
 """
+
 import argparse
+import contextlib
 import datetime as dt
 import difflib
+import functools
 import json
 import os
 import re
-import subprocess
+import shutil
+
+# Every subprocess call below passes an argv list to a program found by tool(); no shell.
+import subprocess  # nosec B404
 import sys
 import time
 from collections import Counter
@@ -68,11 +74,11 @@ def fix_ocr(s):
 
 
 def now():
-    return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    return dt.datetime.now(dt.UTC).isoformat(timespec="seconds")
 
 
 def norm(s):
-    return re.sub(r"[^0-9a-zа-яё]+", "", s.lower())
+    return re.sub(r"[^0-9a-zа-яё]+", "", s.lower())  # noqa: RUF001 (Cyrillic on purpose)
 
 
 class Marquee:
@@ -119,7 +125,8 @@ class Marquee:
         # so take the longest common run instead of an exact prefix.
         tail = self.text[-40:]
         m = difflib.SequenceMatcher(None, tail, frag, autojunk=False).find_longest_match(
-            0, len(tail), 0, len(frag))
+            0, len(tail), 0, len(frag)
+        )
         if m.size >= 6 and m.b <= 4 and m.a + m.size >= len(tail) - 4:
             self.text = self.text[: len(self.text) - len(tail) + m.a - m.b] + frag
 
@@ -172,11 +179,23 @@ class Tracklist:
         os.replace(tmp, self.path)
 
 
+@functools.cache
+def tool(name):
+    """Absolute path of a required program, or exit naming it."""
+    path = shutil.which(name)
+    if not path:
+        sys.exit(f"collect.py needs {name}; install it and try again")
+    return path
+
+
 def ocr(pgm):
     """OCRs one plate; a wide word gap (the marquee's separator) becomes a double space."""
-    out = subprocess.run(
-        ["tesseract", "stdin", "stdout", "--psm", "7", "-l", "eng", "tsv"],
-        input=pgm, capture_output=True,
+    # A failed OCR is an empty line, not an error.
+    out = subprocess.run(  # noqa: S603  # nosec B603
+        [tool("tesseract"), "stdin", "stdout", "--psm", "7", "-l", "eng", "tsv"],
+        input=pgm,
+        capture_output=True,
+        check=False,
     ).stdout.decode("utf-8", "replace")
     words = []
     for row in out.splitlines()[1:]:
@@ -205,10 +224,11 @@ def read_pgm(stream):
 
 
 def hls_url(cookies):
-    cmd = ["yt-dlp", "-q", "-f", "95/best[height<=720]", "-g", STREAM_URL]
+    cmd = [tool("yt-dlp"), "-q", "-f", "95/best[height<=720]", "-g", STREAM_URL]
     if cookies:
         cmd[1:1] = ["--cookies-from-browser", cookies]
-    return subprocess.run(cmd, capture_output=True, text=True, check=True).stdout.strip()
+    # cookies is one argument to yt-dlp, never parsed by a shell.
+    return subprocess.run(cmd, capture_output=True, text=True, check=True).stdout.strip()  # noqa: S603  # nosec B603
 
 
 def feed(marquee, line, ocr_log):
@@ -227,11 +247,22 @@ def watch(marquee, cookies, ocr_log):
             time.sleep(60)
             continue
         started = time.monotonic()
-        ff = subprocess.Popen(
-            ["ffmpeg", "-loglevel", "error", "-i", url, "-vf", f"fps={FPS},scale=1280:720,{CROP},{PREP}",
-             "-f", "image2pipe", "-c:v", "pgm", "-"],
-            stdout=subprocess.PIPE,
-        )
+        vf = f"fps={FPS},scale=1280:720,{CROP},{PREP}"
+        argv = [
+            tool("ffmpeg"),
+            "-loglevel",
+            "error",
+            "-i",
+            url,
+            "-vf",
+            vf,
+            "-f",
+            "image2pipe",
+            "-c:v",
+            "pgm",
+            "-",
+        ]
+        ff = subprocess.Popen(argv, stdout=subprocess.PIPE)  # noqa: S603  # nosec B603
         while (frame := read_pgm(ff.stdout)) is not None:
             feed(marquee, ocr(frame), ocr_log)
         ff.wait()
@@ -260,17 +291,23 @@ def watch_dir(marquee, frames_dir, ocr_log):
 def main():
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--out", default="tracks.json")
-    p.add_argument("--now", action="store_true",
-                   help="print the current track to stdout as JSON lines")
-    p.add_argument("--cookies-from-browser", metavar="BROWSER[:PROFILE]",
-                   help="passed to yt-dlp, e.g. firefox:~/.config/zen/xxxx.default-release")
+    p.add_argument("--now", action="store_true", help="print the current track to stdout as JSON lines")
+    p.add_argument(
+        "--cookies-from-browser",
+        metavar="BROWSER[:PROFILE]",
+        help="passed to yt-dlp, e.g. firefox:~/.config/zen/xxxx.default-release",
+    )
     p.add_argument("--ocr-log", metavar="FILE", help="append every raw OCR line here, for debugging")
     p.add_argument("--replay", metavar="FILE", help="feed OCR lines from a file instead of the stream")
-    p.add_argument("--frames-dir", metavar="DIR",
-                   help="OCR plate frames a player writes here instead of opening the stream")
+    p.add_argument(
+        "--frames-dir",
+        metavar="DIR",
+        help="OCR plate frames a player writes here instead of opening the stream",
+    )
     a = p.parse_args()
 
     tracks = Tracklist(a.out)
+
     def now_playing(artist, title):
         print(json.dumps({"artist": artist, "title": title}, ensure_ascii=False), flush=True)
 
@@ -281,11 +318,12 @@ def main():
                 for line in f:
                     marquee.feed(line)
         else:
-            ocr_log = open(a.ocr_log, "a", encoding="utf-8") if a.ocr_log else None
-            if a.frames_dir:
-                watch_dir(marquee, a.frames_dir, ocr_log)
-            else:
-                watch(marquee, a.cookies_from_browser, ocr_log)
+            log = open(a.ocr_log, "a", encoding="utf-8") if a.ocr_log else contextlib.nullcontext()  # noqa: SIM115
+            with log as ocr_log:
+                if a.frames_dir:
+                    watch_dir(marquee, a.frames_dir, ocr_log)
+                else:
+                    watch(marquee, a.cookies_from_browser, ocr_log)
     except KeyboardInterrupt:
         pass
     marquee.flush()

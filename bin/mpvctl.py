@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Sends one JSON command to mpv's IPC socket and prints the reply."""
+
 import json
 import socket
 import sys

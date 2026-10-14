@@ -100,6 +100,17 @@ The plugin keeps everything it learns in `~/.local/share/clawd-fm/tracks.json`. 
 python3 bin/collect.py --out tracks.json --cookies-from-browser firefox
 ```
 
+## Development
+
+```sh
+claude plugin validate .           # manifest and hooks module
+claude plugin test .               # hooks/*.test.tsx
+uvx ruff check bin/ && uvx ruff format --check bin/
+bandit -r bin/
+```
+
+The ruff settings live in `pyproject.toml`. The `subprocess` calls in `bin/collect.py` are marked `nosec`: each passes an argv list to a program found with `shutil.which`, and none goes through a shell.
+
 ## Credits
 
 The music on Claude FM belongs to its artists. This plugin plays the official live stream and does not copy or redistribute any audio. If you like a track, look the artist up and support them.
