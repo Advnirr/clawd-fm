@@ -73,6 +73,14 @@ function base64(bytes: Uint8Array): string {
   return out
 }
 
+function mix(a: number, b: number, k: number): number {
+  const ch = (shift: number) => {
+    const from = (a >> shift) & 255
+    return Math.round(from + (((b >> shift) & 255) - from) * k) << shift
+  }
+  return ch(16) | ch(8) | ch(0)
+}
+
 class Canvas {
   readonly cells: Cell[]
   readonly px: (number | null)[]
@@ -88,6 +96,16 @@ class Canvas {
     cell.ch = ch.codePointAt(0) ?? 32
     cell.fg = fg
     if (bg !== undefined) cell.bg = bg
+  }
+
+  // A highlight sweeps left to right over the text, like Claude Code's spinner word.
+  shimmer(x: number, y: number, s: string, t: number, base: number, glow: number) {
+    const span = s.length + 8
+    const head = (t % span) - 4
+    for (let i = 0; i < s.length; i++) {
+      const k = Math.max(0, 1 - Math.abs(i - head) / 3)
+      if (s[i] !== ' ') this.put(x + i, y, s[i]!, mix(base, glow, k))
+    }
   }
 
   // Spaces are skipped unless a background is given.
@@ -523,7 +541,7 @@ function happy(c: Canvas, t: number) {
     const y = Math.floor(noise(k + 9, Math.floor(t / 2)) * 3)
     if (noise(x, y) > 0.4) c.put(x, y, k % 2 ? '*' : '+', k % 3 ? CLAWD : p.bright)
   }
-  c.text(Math.min(cols - 6, 18), 1, 'done!', p.bright)
+  c.shimmer(Math.min(cols - 6, 18), 1, 'done!', t, p.bright, CLAWD)
 }
 
 function oops(c: Canvas, t: number) {
@@ -532,7 +550,7 @@ function oops(c: Canvas, t: number) {
   const x = 4 + (t % 2) // shiver
   c.clawd(BLINK, x, 1)
   c.pixel(x + 11, 1 + (Math.floor(t / 2) % 4), 0x7fb3d9) // sweat drop
-  c.text(Math.min(cols - 5, 18), 1, 'oops', CLAWD)
+  c.shimmer(Math.min(cols - 5, 18), 1, 'oops', t, CLAWD, p.bright)
 }
 
 const SCENES: Record<SceneName, (c: Canvas, t: number, detail: string) => void> = {
@@ -591,7 +609,7 @@ export function frame(scene: SceneName, cols: number, t: number, o: FrameOptions
   // Caption, except where the scene already shows it.
   if (detail && scene !== 'shell' && c.cols >= 60) {
     const x = Math.max(46, Math.floor(c.cols * 0.55))
-    c.text(x, 2, detail.slice(0, c.cols - x - 1), c.p.dim)
+    c.shimmer(x, 2, detail.slice(0, c.cols - x - 1), t, c.p.dim, 0xf0b08a)
   }
   if (o.label) plate(c, o.label, t)
   return c.pack()
