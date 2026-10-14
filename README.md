@@ -123,38 +123,40 @@ The ruff settings live in `pyproject.toml`. The `subprocess` calls in `bin/colle
 
 The music on Claude FM belongs to its artists. This plugin plays the official live stream and does not copy or redistribute any audio. If you like a track, look the artist up and support them.
 
-Tracks heard on the stream so far, as the stream's own plate names them:
+Tracks heard on the stream so far, as the stream's own plate names them. An artist is linked only where a catalog lists that exact track under that name; the others could not be found online yet.
 
-| Artist | Track |
-|---|---|
-| Ardley | Dawn Hour |
-| Astor | Blue Houses (Ft. Nate Purscelley) |
-| Astor | Evening in Spring (Ft. Farnell Newton) |
-| Astor | Forest Park (Ft. Farnell Newton) |
-| Astor | Midnight Tourist |
-| Astor | Street Lights in the Fog |
-| Cameron Smith | Every Goodbye Is a Chance for New Universes |
-| Chad Crouch | Shipping Lanes |
-| Cineone | Nature Guide |
-| David Swensen | Second Sister |
-| Fields of Ethera | Boundless Horizons C |
-| Fields of Ethera | Breathe In (Lofi Edition) |
-| Grapefruit | Cop Talk |
-| Jaimie Pangan | Another Lofi Day |
-| Jaybird Blonde | Subway Ride |
-| Joey Kantor | Palmera |
-| Joya | Oregold |
-| Keen Collective | Beginnings |
-| Kolby Wade | Pianos on Grand Street |
-| Kyle Preston | We Made It. We Finally Made It |
-| Memory Palace | Sweetgrass |
-| Ol' Burger Beats | Ella G |
-| Ol' Burger Beats | Winter Night |
-| Peripheral Bliss | Between Dreams |
-| Siren and the Sea | Instinct |
-| Siren and the Sea | Organ Breath |
-| Siren and the Sea | The Large Floating Vessel |
-| Staggering Vistas | That's The Equipment |
+| Artist | Track | Listen |
+|---|---|---|
+| Ardley | Dawn Hour | [Apple Music](https://music.apple.com/us/artist/ardley/252329659) |
+| Astor | Blue Houses (Ft. Nate Purscelley) | [Apple Music](https://music.apple.com/us/artist/astor/1580170691) |
+| Astor | Evening in Spring (Ft. Farnell Newton) | [Apple Music](https://music.apple.com/us/artist/astor/1580170691) |
+| Astor | Forest Park (Ft. Farnell Newton) | [Apple Music](https://music.apple.com/us/artist/astor/1580170691) |
+| Astor | Midnight Tourist | [Apple Music](https://music.apple.com/us/artist/astor/1580170691) |
+| Astor | Street Lights in the Fog | [Apple Music](https://music.apple.com/us/artist/astor/1580170691) |
+| Cameron Smith | Every Goodbye Is a Chance for New Universes |  |
+| Chad Crouch | Shipping Lanes | [Apple Music](https://music.apple.com/us/artist/chad-crouch/19053718) · [Deezer](https://www.deezer.com/artist/2342991) |
+| Cineone | Nature Guide |  |
+| David Swensen | Second Sister |  |
+| Fields of Ethera | Boundless Horizons C | [Apple Music](https://music.apple.com/us/artist/fields-of-ethera/1779019601) |
+| Fields of Ethera | Breathe In (Lofi Edition) | [Apple Music](https://music.apple.com/us/artist/fields-of-ethera/1779019601) |
+| Graham Barton | Juntura |  |
+| Grapefruit | Cop Talk |  |
+| Jaimie Pangan | Another Lofi Day |  |
+| Jaimie Pangan | Lofi Mechanical Heartbeat |  |
+| Jaybird Blonde | Subway Ride |  |
+| Joey Kantor | Palmera | [Apple Music](https://music.apple.com/us/artist/joey-kantor/1555719070) |
+| Joya | Oregold | [Apple Music](https://music.apple.com/us/artist/joya/82430926) · [Deezer](https://www.deezer.com/artist/133212) |
+| Keen Collective | Beginnings | [Apple Music](https://music.apple.com/us/artist/keen-collective/1532380082) |
+| Kolby Wade | Pianos on Grand Street |  |
+| Kyle Preston | We Made It. We Finally Made It | [Apple Music](https://music.apple.com/us/artist/kyle-preston/1055457630) · [Deezer](https://www.deezer.com/artist/10455373) |
+| Memory Palace | Sweetgrass | [Apple Music](https://music.apple.com/us/artist/memory-palace/1579120302) |
+| Ol' Burger Beats | Ella G | [Apple Music](https://music.apple.com/us/artist/ol-burger-beats/933212664) · [Deezer](https://www.deezer.com/artist/6930641) |
+| Ol' Burger Beats | Winter Night | [Apple Music](https://music.apple.com/us/artist/ol-burger-beats/933212664) · [Deezer](https://www.deezer.com/artist/6930641) |
+| Peripheral Bliss | Between Dreams | [Apple Music](https://music.apple.com/us/artist/peripheral-bliss/300367124) |
+| Siren and the Sea | Instinct | [Apple Music](https://music.apple.com/us/artist/siren-and-the-sea/1180251702) · [Deezer](https://www.deezer.com/artist/11440890) · [Bandcamp](https://sirenandthesea.bandcamp.com) |
+| Siren and the Sea | Organ Breath | [Apple Music](https://music.apple.com/us/artist/siren-and-the-sea/1180251702) · [Deezer](https://www.deezer.com/artist/11440890) · [Bandcamp](https://sirenandthesea.bandcamp.com) |
+| Siren and the Sea | The Large Floating Vessel | [Apple Music](https://music.apple.com/us/artist/siren-and-the-sea/1180251702) · [Deezer](https://www.deezer.com/artist/11440890) · [Bandcamp](https://sirenandthesea.bandcamp.com) |
+| Staggering Vistas | That's The Equipment |  |
 
 The playlist changes over time, so this list is a snapshot. Run `/fm list` to see what your copy has heard.
 
