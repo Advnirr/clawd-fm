@@ -173,7 +173,7 @@ function launch($: EngineInterface) {
 // Turns mpv's last words into something to act on.
 function explain(said: string): string | null {
   if (/Sign in to confirm/i.test(said)) {
-    return 'YouTube asks to sign in: set "Cookies from browser" in /plugin configure clawd-fm'
+    return 'YouTube asks to sign in: /plugin configure clawd-fm@clawd-fm → Cookies from browser'
   }
   if (/429|Too Many Requests/i.test(said)) return 'YouTube rate limit (429)'
   const last = said.split('\n').map(l => l.trim()).filter(l => /error|fail/i.test(l)).pop()
@@ -373,6 +373,7 @@ export const register: Register = (on, options) => {
           />
         )}
         <Box>
+          <Box flexShrink={0}>
           <Text> </Text>
           <Button key="play" hotkey="p" plain onPress={() => void (want ? stop($) : play())}>
             {isOn ? '■ stop' : '▶ play'}
@@ -385,6 +386,7 @@ export const register: Register = (on, options) => {
           <Button key="scene" hotkey="s" plain onPress={() => void update($, scene, n => n + 1)}>
             scene <Text dimColor>›</Text>
           </Button>
+          </Box>
           <Text dimColor wrap="truncate-end">
             {'   '}{hasScene ? note : note || `♫ ${name}`}
           </Text>
