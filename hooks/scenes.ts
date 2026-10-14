@@ -5,11 +5,14 @@ export const ROWS = 4
 const PX_ROWS = ROWS * 2
 
 export type WorkName = 'think' | 'shell' | 'read' | 'edit' | 'web' | 'agent' | 'happy' | 'oops'
-export type IdleName = 'meadow' | 'rain' | 'sea' | 'snow' | 'night' | 'city' | 'campfire' | 'space'
+export type IdleName =
+  | 'meadow' | 'rain' | 'sea' | 'snow' | 'train'
+  | 'night' | 'city' | 'campfire' | 'space' | 'lighthouse' | 'fireflies'
+  | 'room'
 export type SceneName = IdleName | WorkName
-export const DAY_SCENES: readonly IdleName[] = ['meadow', 'rain', 'sea', 'snow']
-export const NIGHT_SCENES: readonly IdleName[] = ['night', 'city', 'campfire', 'space']
-export const IDLE_SCENES: readonly IdleName[] = [...DAY_SCENES, ...NIGHT_SCENES]
+export const DAY_SCENES: readonly IdleName[] = ['meadow', 'room', 'rain', 'train', 'sea', 'snow']
+export const NIGHT_SCENES: readonly IdleName[] = ['night', 'room', 'city', 'fireflies', 'campfire', 'lighthouse', 'space']
+export const IDLE_SCENES: readonly IdleName[] = [...new Set([...DAY_SCENES, ...NIGHT_SCENES])]
 
 // Terminal's own background.
 const NONE = 0x01000000
@@ -293,6 +296,106 @@ function space(c: Canvas, t: number) {
   else c.pixel(x - 1, 7, 0xe8a33d)
 }
 
+// Cozy room: Clawd at a laptop, a mug, a lamp, rain on the window.
+function room(c: Canvas, t: number) {
+  const { cols, p } = c
+  const lampGlow = 0x2a2418
+  // Desk with warm light around the lamp.
+  for (let x = 0; x < 26; x++) c.put(x, 3, '▀', p.wood)
+  for (let y = 0; y < 3; y++) for (let x = 19; x < 26; x++) c.put(x, y, ' ', p.ink, lampGlow)
+  c.clawd(Math.floor(t / 2) % 2 ? TYPE_B : WALK_A, 1, 1)
+  // Mug with steam.
+  c.sprite(['ww.', 'www', 'ww.'], 11, 3, { w: 0xe8e6dc })
+  c.put(11 + (Math.floor(t / 4) % 2), 0, '~', p.dim)
+  c.put(12 - (Math.floor(t / 4) % 2), 1, '~', p.dim)
+  // Laptop, its screen lit.
+  for (let x = 14; x < 19; x++) {
+    c.put(x, 1, noise(x, Math.floor(t / 3)) < 0.5 ? '-' : ' ', 0x9fb8c9, 0x2f4a5f)
+    c.put(x, 2, noise(x + 9, Math.floor(t / 3)) < 0.5 ? '-' : ' ', 0x9fb8c9, 0x2f4a5f)
+  }
+  for (let x = 13; x < 20; x++) c.pixel(x, 6, p.dim)
+  // Lamp.
+  c.sprite(['.sss.', 'sssss', '..l..', '..l..', '..l..', '.lll.'], 20, 0, { s: 0xe8a33d, l: p.dim })
+  // Window: rain over blurred city lights.
+  const wx = 28
+  const w = Math.max(10, Math.min(30, cols - wx - 2))
+  const pane = 0x18222c
+  for (let y = 0; y < 3; y++) {
+    for (let x = wx; x < wx + w; x++) {
+      const mid = x === wx + (w >> 1)
+      if (x === wx || x === wx + w - 1 || mid) c.put(x, y, '│', p.wood, pane) // │
+      else if (y === 2 && noise(x, 100) < 0.35) {
+        const on = noise(x, Math.floor((t + x * 7) / 30)) < 0.8
+        c.put(x, y, '▄', on ? [0xe8c060, 0xd97757, 0x9fb8c9][Math.floor(noise(x, 101) * 3)]! : 0x2a2a2a, pane)
+      } else if (noise(x, 102) < 0.5 && (Math.floor(t / 2) + Math.floor(noise(x, 103) * 6)) % 6 === y) {
+        c.put(x, y, noise(x, 104) < 0.6 ? '|' : '.', 0x8fb0c8, pane)
+      } else c.put(x, y, ' ', p.ink, pane)
+    }
+  }
+  for (let x = wx - 1; x < wx + w + 1; x++) c.put(x, 3, '▀', p.wood) // sill
+}
+
+// A train ride: hills and poles slide past the windows.
+function train(c: Canvas, t: number) {
+  const { cols, p } = c
+  const sky = 0x3d5468
+  const scroll = t
+  for (let x = 0; x < cols; x++) {
+    const wall = x % 22 < 3
+    for (let y = 0; y < 3; y++) c.put(x, y, ' ', p.ink, wall ? 0x3a3936 : sky)
+    if (wall) continue
+    const wx = x + scroll
+    const h = 2 + Math.floor(noise(Math.floor(wx / 6), 110) * 3) // hills, 2..4 px
+    for (let py = 6 - h; py < 6; py++) c.pixel(x, py, 0x4f7a45)
+    if (wx % 17 === 0) for (let py = 0; py < 6; py++) c.pixel(x, py, 0x6b6a64) // pole
+    if (noise(Math.floor((x + scroll / 4) / 1), 111) < 0.03) c.put(x, 0, '.', p.dim, sky)
+  }
+  for (let x = 0; x < cols; x++) c.put(x, 3, '▀', 0x5a3e2b) // seats
+  c.clawd(t % 40 < 2 ? BLINK : WALK_A, 6, 2)
+}
+
+// A lighthouse sweeps its beam over the sea.
+function lighthouse(c: Canvas, t: number) {
+  const { cols, p } = c
+  for (let y = 2; y < ROWS; y++) {
+    c.fillRow(y, p.water)
+    for (let x = 0; x < cols; x++) if ((x + Math.floor(t / 3) + y * 4) % 7 === 0) c.put(x, y, '~', p.foam)
+  }
+  for (let x = 0; x < cols; x++) if (noise(x, 120) < 0.04) c.put(x, 0, '.', p.dim)
+  // Rocks with Clawd on them.
+  for (let x = 0; x < 16; x++) c.pixel(x, 5, 0x4a4944)
+  for (let x = 1; x < 14; x++) c.pixel(x, 4, 0x4a4944)
+  c.clawd(t % 30 < 2 ? BLINK : WALK_A, 3, 0)
+  const lx = Math.max(24, Math.floor(cols * 0.42))
+  c.sprite(['.yy.', 'wwww', 'rrrr', 'wwww', 'rrrr', 'wwww', 'kkkk'], lx, 0,
+    { y: 0xf0d060, w: 0xf0eee6, r: 0xc0392b, k: 0x4a4944 })
+  // The beam alternates sides and fades out.
+  const phase = t % 24
+  const dir = phase < 12 ? 1 : -1
+  const reach = (phase % 12) * 3
+  for (let i = 1; i <= reach; i++) {
+    const x = dir > 0 ? lx + 4 + i : lx - 1 - i
+    c.put(x, 0, '─', i < reach / 2 ? 0xf0d060 : 0x8a7a40)
+  }
+}
+
+// Fireflies blink between dark trees.
+function fireflies(c: Canvas, t: number) {
+  const { cols, p } = c
+  const tree = 0x1f3a2a
+  for (let i = 0; i < Math.ceil(cols / 14); i++) {
+    const tx = Math.floor(i * 14 + noise(i, 130) * 8)
+    c.sprite(['..t..', '.ttt.', 'ttttt', '.ttt.', 'ttttt', '..b..', '..b..'], tx, 0, { t: tree, b: 0x3a2e24 })
+  }
+  for (let x = 0; x < cols; x++) c.put(x, 3, noise(x, 131) < 0.3 ? '"' : '_', 0x2f4a2f)
+  for (let k = 0; k < Math.floor(cols / 4); k++) {
+    const x = Math.floor(noise(k, 132) * cols + Math.sin((t + k * 13) / 9) * 3)
+    const y = Math.floor(noise(k, 133) * 3)
+    if ((t + k * 5) % 14 < 9) c.put(x, y, '•', (t + k) % 14 < 4 ? 0xf0f070 : 0xa8c050)
+  }
+  c.clawd(Math.floor(t / 3) % 2 ? WALK_B : WALK_A, walkerX(cols, t, 3), 2)
+}
+
 // Work scenes: what Claude is doing right now. `detail` is the tool's target.
 
 function think(c: Canvas, t: number) {
@@ -431,7 +534,7 @@ function oops(c: Canvas, t: number) {
 }
 
 const SCENES: Record<SceneName, (c: Canvas, t: number, detail: string) => void> = {
-  meadow, rain, sea, snow, night, city, campfire, space, think, shell, read, edit, web, agent, happy, oops,
+  meadow, rain, sea, snow, train, night, city, campfire, space, lighthouse, fireflies, room, think, shell, read, edit, web, agent, happy, oops,
 }
 
 // "♫ label" on a dark plate in the top-right corner, scrolling when long.

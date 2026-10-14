@@ -214,8 +214,12 @@ function startCollector($: EngineInterface) {
         for (const line of lines) {
           try {
             const now = JSON.parse(line) as Track
+            const prev = await read($, track)
+            // A corrected name of the same track keeps the scene.
+            const isSame = prev?.artist === now.artist && prev.title.slice(0, 8) === now.title.slice(0, 8)
             await update($, track, () => now)
-            await update($, scene, () => hash(now.title))
+            // Next scene in turn, so none repeats before all were shown.
+            if (!isSame) await update($, scene, n => n + 1)
           } catch { /* not a track line */ }
         }
       }
@@ -397,10 +401,4 @@ function idleScene(idx: number): SceneName {
   const hour = new Date().getHours()
   const pool = hour >= 7 && hour < 20 ? DAY_SCENES : NIGHT_SCENES
   return pool[idx % pool.length] ?? 'meadow'
-}
-
-function hash(s: string): number {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0
-  return h >>> 0
 }
