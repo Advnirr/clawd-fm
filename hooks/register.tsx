@@ -216,7 +216,7 @@ function startCollector($: EngineInterface) {
             const now = JSON.parse(line) as Track
             const prev = await read($, track)
             // A corrected name of the same track keeps the scene.
-            const isSame = prev?.artist === now.artist && prev.title.slice(0, 8) === now.title.slice(0, 8)
+            const isSame = prev !== null && prev.title.slice(0, 8) === now.title.slice(0, 8)
             await update($, track, () => now)
             // Next scene in turn, so none repeats before all were shown.
             if (!isSame) await update($, scene, n => n + 1)
