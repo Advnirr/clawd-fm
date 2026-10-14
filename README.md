@@ -67,8 +67,6 @@ From a shell:
 claude plugin install clawd-fm --marketplace Advnirr/clawd-fm
 ```
 
-The repository is private for now. Installing needs read access on GitHub and a git credential for github.com on your machine, for example `gh auth login` followed by `gh auth setup-git`.
-
 ### YouTube sign-in
 
 YouTube often answers yt-dlp with "Sign in to confirm you're not a bot", and the band then says so. If that happens, let yt-dlp borrow your browser's YouTube cookies. Run `/plugin configure clawd-fm@clawd-fm` and set **Cookies from browser**, or pass it when installing from a shell: `claude plugin install clawd-fm@clawd-fm --config cookiesFromBrowser=firefox`. The value is one of:
