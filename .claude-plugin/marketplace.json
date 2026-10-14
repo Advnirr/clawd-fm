@@ -1,0 +1,6 @@
+{
+  "name": "clawd-fm",
+  "description": "Claude FM radio with Clawd scenes for Claude Code",
+  "owner": { "name": "Mikhail Mlhcnn" },
+  "plugins": [{ "name": "clawd-fm", "source": "./" }]
+}
