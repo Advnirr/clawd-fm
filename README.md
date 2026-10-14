@@ -9,7 +9,36 @@
 - **Reactions**: Clawd jumps when a turn finishes and sweats when a tool fails.
 - **Track list**: every track heard is saved, and `/fm list` prints them with Spotify search links.
 
+![clawd-fm in Claude Code](docs/demo.gif)
+
 Terminal only for now: the scenes use Claude Code's pixel `Raster` element, which the desktop app does not draw.
+
+## Scenes
+
+The cozy room with rain on the window, shown both day and night, with the band and its controls above the prompt:
+
+![Cozy room](docs/room.png)
+
+**Day** (7:00 to 20:00): a meadow, rain, a train ride, a pier and snow.
+
+![Meadow](docs/meadow.png)
+![Rain](docs/rain.png)
+![Train](docs/train.png)
+![Pier](docs/sea.png)
+![Snow](docs/snow.png)
+
+**Evening and night**: a city, fireflies, a campfire, a lighthouse, a starry night and a rocket ride.
+
+![City](docs/city.png)
+![Fireflies](docs/fireflies.png)
+![Campfire](docs/campfire.png)
+![Lighthouse](docs/lighthouse.png)
+![Night](docs/night.png)
+![Space](docs/space.png)
+
+**While Claude works**, the scene follows the tool in use, and Clawd jumps when the turn is done:
+
+![Done](docs/happy.png)
 
 ## Requirements
 
