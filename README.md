@@ -71,12 +71,12 @@ The repository is private for now. Installing needs read access on GitHub and a 
 
 ### YouTube sign-in
 
-YouTube often answers yt-dlp with "Sign in to confirm you're not a bot". If that happens, let yt-dlp borrow your browser's YouTube cookies. In `/config`, set **clawd-fm → Cookies from browser** to one of:
+YouTube often answers yt-dlp with "Sign in to confirm you're not a bot", and the band then says so. If that happens, let yt-dlp borrow your browser's YouTube cookies. Run `/plugin configure clawd-fm@clawd-fm` and set **Cookies from browser**, or pass it when installing from a shell: `claude plugin install clawd-fm@clawd-fm --config cookiesFromBrowser=firefox`. The value is one of:
 
 - `firefox`, `chrome`, `brave`, and so on, for the browser's default profile
 - `firefox:/path/to/profile` for one exact profile. Firefox forks such as Zen keep their profiles in their own folders, for example `~/.config/zen/xxxx.default-release`.
 
-The cookies are only passed to yt-dlp on your machine.
+The cookies are only passed to yt-dlp on your machine. They do give access to the YouTube account they belong to, so a separate browser profile signed in to YouTube only is a good idea.
 
 ## Use
 
@@ -89,6 +89,14 @@ The cookies are only passed to yt-dlp on your machine.
 | `/fm list` | every track heard so far, with Spotify search links |
 
 Keys: press `ctrl+x`, then `tab`, to focus the band. Then `p` plays or stops, `j` and `k` change the volume, `s` changes the scene, and `Esc` returns to the prompt. `[-]` at the band's right edge collapses it.
+
+## Limitations
+
+- Tested on Linux (Arch / CachyOS). macOS should work with the same tools from Homebrew, but it is untested. Windows is not supported.
+- Terminal only: the desktop app does not draw the pixel scenes.
+- Plugin function hooks are an early-access Claude Code API. The plugin was built on 2.1.299 and 2.1.300 and may need changes after Claude Code updates.
+- The track name is read from where the stream draws its plate today. If Claude FM changes its layout, `CROP` in `bin/collect.py` and `PLATE_VF` in `hooks/register.tsx` need new coordinates.
+- Playing YouTube through yt-dlp is outside what YouTube's terms of service allow. Many open-source players work this way, but use it knowing that.
 
 ## How it works
 

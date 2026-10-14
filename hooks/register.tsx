@@ -116,6 +116,7 @@ async function stop($: EngineInterface) {
   want = false
   await kill($)
   await update($, status, () => 'off')
+  await update($, error, () => null)
 }
 
 async function kill($: EngineInterface) {
@@ -138,11 +139,11 @@ function launch($: EngineInterface) {
   const sock = socket
   const frames = `/tmp/clawd-fm-${id}`
   const argv = [
-    'mpv', '--no-terminal', `--input-ipc-server=${sock}`, `--volume=${volumeNow}`,
+    'mpv', '--quiet', '--msg-level=all=warn', '--no-input-terminal', '--term-osd=no',
+    `--input-ipc-server=${sock}`, `--volume=${volumeNow}`,
     '--ytdl-format=95/best[height<=720]/best', '--hwdec=auto-copy-safe',
     '--vo=image', '--vo-image-format=png', `--vo-image-outdir=${frames}`, `--vf=${PLATE_VF}`,
     '--cache=yes', '--cache-secs=30', '--demuxer-readahead-secs=20',
-    '--log-file=/tmp/clawd-fm-mpv.log',
   ]
   if (cookies) argv.push(`--ytdl-raw-options=cookies-from-browser=${cookies}`)
   argv.push(STREAM)
@@ -150,13 +151,16 @@ function launch($: EngineInterface) {
   player = child
   framesDir = frames
   void (async () => {
+    // mpv prints only warnings and errors; keep the tail to explain a failure.
+    let said = ''
     try {
-      for await (const _ of child) { /* silent with --no-terminal */ }
-      const { code } = await child.result
-      if (code !== 0) await update($, error, () => `mpv exited with code ${code}`)
+      for await (const { text } of child) said = (said + text).slice(-4000)
+      await child.result
     } catch (err) {
-      await update($, error, () => `mpv: ${String(err)}`)
+      said += `\nmpv: ${String(err)}`
     }
+    const why = explain(said)
+    if (why) await update($, error, () => why)
     await $.process.run(['rm', '-rf', sock, frames]).catch(() => null)
     if (player === child) {
       player = null
@@ -164,6 +168,16 @@ function launch($: EngineInterface) {
     }
   })()
   startCollector($)
+}
+
+// Turns mpv's last words into something to act on.
+function explain(said: string): string | null {
+  if (/Sign in to confirm/i.test(said)) {
+    return 'YouTube asks to sign in: set "Cookies from browser" in /plugin configure clawd-fm'
+  }
+  if (/429|Too Many Requests/i.test(said)) return 'YouTube rate limit (429)'
+  const last = said.split('\n').map(l => l.trim()).filter(l => /error|fail/i.test(l)).pop()
+  return last ? last.replace(/^\[[^\]]+\]\s*/, '').slice(0, 120) : null
 }
 
 // Runs every few seconds: starts, checks and restarts the player.
@@ -341,7 +355,7 @@ export const register: Register = (on, options) => {
     if (!hasScene) band.cols = 0
 
     const name = now ? `${now.artist} — ${now.title}` : ''
-    const note = st === 'loading' ? 'tuning in…'
+    const note = st === 'loading' ? (err ? `${err} · retrying` : 'tuning in…')
       : st === 'error' ? `error: ${err ?? 'unknown'}`
       : st === 'off' ? 'off air'
       : name ? '' : 'listening for the track name…'
