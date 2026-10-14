@@ -61,6 +61,9 @@ def fix_word(word):
 
 
 def fix_ocr(s):
+    # Track numbers: 0l -> 01, l2 -> 12.
+    s = re.sub(r"\b([0-9])[lI|](?=\b|[0-9])", r"\g<1>1", s)
+    s = re.sub(r"\b[lI|]([0-9])\b", r"1\g<1>", s)
     return " ".join(fix_word(w) for w in s.split(" "))
 
 

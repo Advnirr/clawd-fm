@@ -322,23 +322,38 @@ function room(c: Canvas, t: number) {
   for (let x = wx - 1; x < wx + w + 1; x++) c.put(x, 3, '\u2580', p.wood) // sill
 }
 
-// A train ride: hills and poles slide past the windows.
+// A train rolls along: the land slides back, smoke trails behind.
 function train(c: Canvas, t: number) {
   const { cols, p } = c
-  const sky = 0x3d5468
-  const scroll = t
+  // Far hills drift slowly, poles rush by.
   for (let x = 0; x < cols; x++) {
-    const wall = x % 22 < 3
-    for (let y = 0; y < 3; y++) c.put(x, y, ' ', p.ink, wall ? 0x3a3936 : sky)
-    if (wall) continue
-    const wx = x + scroll
-    const h = 2 + Math.floor(noise(Math.floor(wx / 6), 110) * 3) // hills, 2..4 px
-    for (let py = 6 - h; py < 6; py++) c.pixel(x, py, 0x4f7a45)
-    if (wx % 17 === 0) for (let py = 0; py < 6; py++) c.pixel(x, py, 0x6b6a64) // pole
-    if (noise(Math.floor((x + scroll / 4) / 1), 111) < 0.03) c.put(x, 0, '.', p.dim, sky)
+    const h = 1 + Math.floor(noise(Math.floor((x + t / 2) / 7), 110) * 3)
+    for (let py = 6 - h; py < 6; py++) c.pixel(x, py, 0x3f5a3a)
+    if ((x + t * 2) % 19 === 0) for (let py = 0; py < 6; py++) c.pixel(x, py, 0x6b6a64)
+    c.pixel(x, 7, 0x8a877c) // rail
   }
-  for (let x = 0; x < cols; x++) c.put(x, 3, '▀', 0x5a3e2b) // seats
-  c.clawd(t % 40 < 2 ? BLINK : WALK_A, 6, 2)
+  const x0 = 4
+  const bump = t % 10 === 0 ? 1 : 0
+  const car = ['bbbbbbbbbbbbbbbbbb', 'bwwwwwwwbwwwwwwwbb', 'bwwwwwwwbwwwwwwwbb', 'bwwwwwwwbwwwwwwwbb', 'rrrrrrrrrrrrrrrrrr']
+  const colors = { b: 0x8c3a2e, w: 0xe8d8a0, r: 0x5a2a22 }
+  c.sprite(car, x0, 1 + bump, colors)
+  c.sprite(car, x0 + 19, 1, colors)
+  c.sprite(MINI_A, x0 + 20, 2, { o: CLAWD, k: p.eye }) // Clawd at a window
+  c.pixel(x0 + 20, 3, 0xe8d8a0)
+  c.pixel(x0 + 25, 3, 0xe8d8a0)
+  // Locomotive with a chimney.
+  const lx = x0 + 38
+  c.sprite(['..........kk.', 'cccc......kk.', 'cwwcsssssssss', 'ccccssssssssn', 'rrrrrrrrrrrrr'], lx, 1 + bump,
+    { k: 0x8a877c, c: 0x8c3a2e, w: 0xe8d8a0, s: 0x5d7a94, n: 0xc0392b, r: 0x5a2a22 })
+  // Wheels turn: two frames.
+  const spin = t % 2
+  for (let x = x0; x < lx + 13; x++) if ((x + spin) % 3 === 0) c.pixel(x, 6, 0x1f1e1d)
+  // Smoke puffs drift back from the chimney.
+  for (let k = 0; k < 4; k++) {
+    const age = (t + k * 4) % 16
+    const sx = lx + 10 - Math.floor(age / 2)
+    c.put(sx, 0, age < 6 ? 'o' : age < 12 ? 'O' : '\u00b0', age < 8 ? p.bright : p.dim) // °
+  }
 }
 
 // A lighthouse sweeps its beam over the sea.
