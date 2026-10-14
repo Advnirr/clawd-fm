@@ -296,43 +296,31 @@ function space(c: Canvas, t: number) {
   else c.pixel(x - 1, 7, 0xe8a33d)
 }
 
-// Cozy room: Clawd at a laptop, a mug, a lamp, rain on the window.
+// Cozy room: Clawd at a laptop, a mug, rain on the window.
 function room(c: Canvas, t: number) {
   const { cols, p } = c
-  const lampGlow = 0x2a2418
-  // Desk with warm light around the lamp.
-  for (let x = 0; x < 26; x++) c.put(x, 3, '▀', p.wood)
-  for (let y = 0; y < 3; y++) for (let x = 19; x < 26; x++) c.put(x, y, ' ', p.ink, lampGlow)
+  for (let x = 0; x < 26; x++) c.put(x, 3, '\u2580', p.wood) // desk
   c.clawd(Math.floor(t / 2) % 2 ? TYPE_B : WALK_A, 1, 1)
+  // Laptop: a dark screen with a line of text flickering on it.
+  const line = 1 + (Math.floor(t / 3) % 3)
+  c.sprite(['ssssss', 'ssssss', 'ssssss', 'ssssss', 'kkkkkkk'], 13, 1, { s: 0x2f4a5f, k: p.dim })
+  for (let x = 14; x < 18; x++) if (noise(x, Math.floor(t / 3)) < 0.7) c.pixel(x, line + 1, 0x7f9fb3)
   // Mug with steam.
-  c.sprite(['ww.', 'www', 'ww.'], 11, 3, { w: 0xe8e6dc })
-  c.put(11 + (Math.floor(t / 4) % 2), 0, '~', p.dim)
-  c.put(12 - (Math.floor(t / 4) % 2), 1, '~', p.dim)
-  // Laptop, its screen lit.
-  for (let x = 14; x < 19; x++) {
-    c.put(x, 1, noise(x, Math.floor(t / 3)) < 0.5 ? '-' : ' ', 0x9fb8c9, 0x2f4a5f)
-    c.put(x, 2, noise(x + 9, Math.floor(t / 3)) < 0.5 ? '-' : ' ', 0x9fb8c9, 0x2f4a5f)
-  }
-  for (let x = 13; x < 20; x++) c.pixel(x, 6, p.dim)
-  // Lamp.
-  c.sprite(['.sss.', 'sssss', '..l..', '..l..', '..l..', '.lll.'], 20, 0, { s: 0xe8a33d, l: p.dim })
-  // Window: rain over blurred city lights.
-  const wx = 28
-  const w = Math.max(10, Math.min(30, cols - wx - 2))
+  c.sprite(['ww.', 'www', 'ww.'], 22, 3, { w: 0xe8e6dc })
+  c.put(22 + (Math.floor(t / 4) % 2), 1, '~', p.dim)
+  // Window: rain over a few faraway lights.
+  const wx = 32
+  const w = Math.max(10, Math.min(28, cols - wx - 2))
   const pane = 0x18222c
   for (let y = 0; y < 3; y++) {
     for (let x = wx; x < wx + w; x++) {
-      const mid = x === wx + (w >> 1)
-      if (x === wx || x === wx + w - 1 || mid) c.put(x, y, '│', p.wood, pane) // │
-      else if (y === 2 && noise(x, 100) < 0.35) {
-        const on = noise(x, Math.floor((t + x * 7) / 30)) < 0.8
-        c.put(x, y, '▄', on ? [0xe8c060, 0xd97757, 0x9fb8c9][Math.floor(noise(x, 101) * 3)]! : 0x2a2a2a, pane)
-      } else if (noise(x, 102) < 0.5 && (Math.floor(t / 2) + Math.floor(noise(x, 103) * 6)) % 6 === y) {
-        c.put(x, y, noise(x, 104) < 0.6 ? '|' : '.', 0x8fb0c8, pane)
-      } else c.put(x, y, ' ', p.ink, pane)
+      if (x === wx || x === wx + w - 1) c.put(x, y, '\u2502', p.wood, pane) // │
+      else if (y === 2 && noise(x, 100) < 0.18) c.put(x, y, '\u2584', [0xb89a50, 0x9a6a50, 0x6f8494][Math.floor(noise(x, 101) * 3)]!, pane)
+      else if (noise(x, 102) < 0.4 && (Math.floor(t / 2) + Math.floor(noise(x, 103) * 6)) % 6 === y) c.put(x, y, '|', 0x8fb0c8, pane)
+      else c.put(x, y, ' ', p.ink, pane)
     }
   }
-  for (let x = wx - 1; x < wx + w + 1; x++) c.put(x, 3, '▀', p.wood) // sill
+  for (let x = wx - 1; x < wx + w + 1; x++) c.put(x, 3, '\u2580', p.wood) // sill
 }
 
 // A train ride: hills and poles slide past the windows.
