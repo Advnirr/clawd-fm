@@ -277,11 +277,20 @@ function space(c: Canvas, t: number) {
     const x = (Math.floor(noise(i, 91) * cols * 4) - Math.floor((t * speed) / 2)) % cols
     c.put((x + cols) % cols, y, ['.', '·', '*'][layer]!, [0x4a4944, 0x8a877c, 0xf0eee6][layer]!)
   }
-  const px = Math.floor(cols * 0.45)
-  c.sprite(['..pppp..', '.pppppp.', 'rrrrrrrr', '.pppppp.', '..pppp..'], px, 2, { p: 0x9c6ab5, r: 0xc9b37a })
-  const bob = Math.floor(t / 6) % 2
-  c.clawd(WALK_A, 10, 1 + bob)
-  if (t % 2) c.pixel(9, 3 + bob, 0xe8a33d) // jetpack puff
+  // A planet drifts by, slower than the stars.
+  const span = cols + 10
+  const px = cols - (Math.floor(t / 6) % span)
+  c.sprite(['..pppp..', '.pppppp.', 'rrrrrrrr', '.pppppp.', '..pppp..'], px, 1, { p: 0x9c6ab5, r: 0xc9b37a })
+  // Clawd rides a rocket; the flame flickers behind it.
+  const x = 8
+  c.clawd(WALK_A, x + 2, 0)
+  c.sprite(['ff.ggggggggggnn.', '.gggggwwgggggnnn', 'ff.ggggggggggnn.'], x, 5,
+    { g: 0xb8b5a8, w: 0x7fb3d9, n: 0xc0392b, f: 0x8a877c })
+  const flame = [0xf0d060, 0xe8a33d, 0xd97757]
+  const len = 2 + (t % 3)
+  for (let i = 0; i < len; i++) c.pixel(x - 1 - i, 6, flame[Math.min(2, i)]!)
+  if (t % 2) c.pixel(x - 1, 5, 0xe8a33d)
+  else c.pixel(x - 1, 7, 0xe8a33d)
 }
 
 // Work scenes: what Claude is doing right now. `detail` is the tool's target.
@@ -436,6 +445,11 @@ function plate(c: Canvas, label: string, t: number) {
     const loop = label + '   '
     const off = Math.floor(t / 2) % loop.length
     shown = (loop + loop).slice(off, off + room)
+  }
+  // The plate stays on top of any pixels under it.
+  for (let x = x0; x < x0 + width; x++) {
+    c.px[x] = null
+    c.px[c.cols + x] = null
   }
   c.text(x0, 0, `   ${shown.padEnd(room)} `, c.p.plateText, c.p.plate)
   c.put(x0 + 1, 0, '\u266b', CLAWD, c.p.plate) // ♫
