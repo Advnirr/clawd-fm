@@ -84,6 +84,9 @@ const TYPE_B = ['.oooooooo.', 'oookookooo', '.oooooooo.', '.oooooooo.', '.o.o..o
 // Helpers, 6x3 px.
 const MINI_A = ['.oooo.', 'okooko', '.o..o.']
 const MINI_B = ['.oooo.', 'okooko', 'o....o']
+// Walking helpers, 6x4 px: a body row above the legs.
+const HELPER_A = ['.oooo.', 'okooko', 'oooooo', '.o..o.']
+const HELPER_B = ['.oooo.', 'okooko', 'oooooo', 'o....o']
 
 // Cheap stable noise in [0, 1).
 function noise(a: number, b = 0): number {
@@ -717,7 +720,7 @@ function agent(c: Canvas, t: number) {
   const x = walkerX(cols + 24, t, 2) + 24
   const step = Math.floor(t / 2) % 2
   c.clawd(step ? WALK_B : WALK_A, x, 1)
-  for (let k = 1; k <= 3; k++) c.sprite((step + k) % 2 ? MINI_B : MINI_A, x - k * 8, 3, { o: CLAWD, k: p.eye })
+  for (let k = 1; k <= 3; k++) c.sprite((step + k) % 2 ? HELPER_B : HELPER_A, x - k * 8, 2, { o: CLAWD, k: p.eye })
 }
 
 // Reactions at the end of a turn or a failed tool.
