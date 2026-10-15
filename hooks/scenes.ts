@@ -6,11 +6,11 @@ const PX_ROWS = ROWS * 2
 
 export type WorkName = 'think' | 'shell' | 'read' | 'edit' | 'web' | 'agent' | 'happy' | 'oops'
 export type IdleName =
-  | 'meadow' | 'rain' | 'sea' | 'snow' | 'train' | 'autumn'
+  | 'meadow' | 'rain' | 'sea' | 'snow' | 'train' | 'autumn' | 'skate'
   | 'night' | 'city' | 'campfire' | 'space' | 'lighthouse' | 'fireflies'
   | 'room' | 'fir' | 'gifts' | 'fireworks'
 export type SceneName = IdleName | WorkName
-export const DAY_SCENES: readonly IdleName[] = ['meadow', 'room', 'rain', 'autumn', 'train', 'sea', 'snow']
+export const DAY_SCENES: readonly IdleName[] = ['meadow', 'room', 'rain', 'autumn', 'train', 'skate', 'sea', 'snow']
 export const NIGHT_SCENES: readonly IdleName[] = ['night', 'room', 'city', 'fireflies', 'campfire', 'lighthouse', 'space']
 // Shown from 10 December to 14 January, every other scene.
 const HOLIDAY_DAY: readonly IdleName[] = ['fir', 'gifts']
@@ -23,7 +23,16 @@ const MONTHS: Partial<Record<IdleName, readonly number[]>> = {
   rain: [3, 4, 5, 6, 7, 8, 9, 10, 11],
   autumn: [9, 10, 11],
   snow: [12, 1, 2],
+  skate: [12, 1, 2],
   fireflies: [6, 7, 8],
+}
+
+export type Season = 'winter' | 'spring' | 'summer' | 'autumn'
+
+// Northern hemisphere, by month.
+export function seasonOf(d: Date): Season {
+  const month = d.getMonth() + 1
+  return month === 12 || month <= 2 ? 'winter' : month <= 5 ? 'spring' : month <= 8 ? 'summer' : 'autumn'
 }
 
 // The scenes to take turns at this date and hour: day ones from 7:00 to 20:00.
@@ -107,6 +116,8 @@ function mix(a: number, b: number, k: number): number {
 class Canvas {
   readonly cells: Cell[]
   readonly px: (number | null)[]
+  // Scenes seen all year dress for it.
+  season: Season = 'summer'
 
   constructor(readonly cols: number, readonly p: Palette) {
     this.cells = Array.from({ length: cols * ROWS }, () => ({ ch: 32, fg: p.ink, bg: NONE }))
@@ -197,6 +208,7 @@ function meadow(c: Canvas, t: number) {
   for (let x = 0; x < cols; x++) {
     const n = noise(x, 3)
     if (n < 0.4) c.put(x, 2, (sway ? "/|\\,'" : "\\|/,'")[Math.floor(n * 12.5)]!, p.ink)
+    else if (c.season === 'spring' && n > 0.9) c.put(x, 2, '*', [0xe8a0c0, 0xf0d060, 0xf0eee6][Math.floor(noise(x, 9) * 3)]!)
     c.put(x, 3, "/\\|#%'.,"[Math.floor(noise(x, 4) * 8)]!, p.ground)
   }
   c.clawd(t % 40 < 2 ? BLINK : Math.floor(t / 2) % 2 ? WALK_B : WALK_A, walkerX(cols, t, 2), 1)
@@ -211,7 +223,10 @@ function night(c: Canvas, t: number) {
     }
   }
   c.put(Math.min(cols - 1, 6), 0, 'C', p.bright)
-  for (let x = 0; x < cols; x++) c.put(x, 3, noise(x, 5) < 0.3 ? ',' : '_', p.dim)
+  for (let x = 0; x < cols; x++) {
+    if (c.season === 'winter') c.pixel(x, 7, SNOW)
+    else c.put(x, 3, noise(x, 5) < 0.3 ? ',' : '_', p.dim)
+  }
   const x = Math.floor(cols / 3)
   c.clawd(BLINK, x, 1)
   const step = Math.floor(t / 4) % 4
@@ -238,6 +253,7 @@ function rain(c: Canvas, t: number) {
 
 function sea(c: Canvas, t: number) {
   const { cols, p } = c
+  if (c.season === 'winter') flakes(c, t, 0.15, 2)
   c.fillRow(2, p.water)
   c.fillRow(3, p.water)
   for (let y = 2; y < ROWS; y++) {
@@ -253,16 +269,23 @@ function sea(c: Canvas, t: number) {
   if (bob) c.put(16, 2, '|', p.ink, p.water)
 }
 
-// Flakes drift down; each column has its own phase. Snow lies on the ground.
-function snowfall(c: Canvas, t: number) {
+// Flakes drift down over the top `rows`; each column has its own phase.
+function flakes(c: Canvas, t: number, density = 0.25, rows = 3) {
   const { cols, p } = c
   for (let x = 0; x < cols; x++) {
-    if (noise(x, 60) > 0.25) continue
+    if (noise(x, 60) > density) continue
     const y = (Math.floor(t / 3) + Math.floor(noise(x, 61) * 8)) % 6
     const dx = Math.floor(t / 6 + noise(x, 62) * 4) % 2
-    if (y < 3) c.put(x + dx, y, noise(x, 63) < 0.3 ? '*' : '.', p.bright)
+    if (y < rows) c.put(x + dx, y, noise(x, 63) < 0.3 ? '*' : '.', p.bright)
   }
-  for (let x = 0; x < cols; x++) c.pixel(x, 7, 0xe8e6dc)
+}
+
+const SNOW = 0xe8e6dc
+
+// Flakes, and snow lying on the ground.
+function snowfall(c: Canvas, t: number) {
+  flakes(c, t)
+  for (let x = 0; x < c.cols; x++) c.pixel(x, 7, SNOW)
 }
 
 function snow(c: Canvas, t: number) {
@@ -291,15 +314,21 @@ function city(c: Canvas, t: number) {
     x += w
     b++
   }
-  for (let i = 0; i < cols; i++) c.put(i, 3, i % 6 === 0 ? '·' : '_', p.dim)
+  for (let i = 0; i < cols; i++) {
+    if (c.season === 'winter') c.pixel(i, 7, SNOW)
+    else c.put(i, 3, i % 6 === 0 ? '·' : '_', p.dim)
+  }
   c.clawd(Math.floor(t / 2) % 2 ? WALK_B : WALK_A, walkerX(cols, t, 2), 3)
 }
 
 function campfire(c: Canvas, t: number) {
   const { cols, p } = c
+  const isWinter = c.season === 'winter'
+  if (isWinter) flakes(c, t, 0.12)
   for (let x = 0; x < cols; x++) {
-    if (noise(x, 80) < 0.03) c.put(x, 0, '.', p.dim)
-    c.put(x, 3, noise(x, 81) < 0.2 ? ',' : '_', p.dim)
+    if (!isWinter && noise(x, 80) < 0.03) c.put(x, 0, '.', p.dim)
+    if (isWinter) c.pixel(x, 7, SNOW)
+    else c.put(x, 3, noise(x, 81) < 0.2 ? ',' : '_', p.dim)
   }
   const fx = Math.max(16, Math.floor(cols / 3))
   c.sprite(['wwwwwwww'], fx - 4, 7, { w: p.wood })
@@ -436,6 +465,30 @@ function fireworks(c: Canvas, t: number) {
   c.clawd(t % 30 < 2 ? BLINK : WALK_A, watcher, 1)
 }
 
+// Winter: Clawd skates on a frozen pond under snowy firs, scarf flying.
+function skate(c: Canvas, t: number) {
+  const { cols } = c
+  flakes(c, t, 0.15)
+  for (let x = 1; x < cols; x += 8 + Math.floor(noise(x, 150) * 9)) {
+    c.sprite(['.w.', 'wgw', 'ggg'], x, 1, { w: SNOW, g: 0x2f5a3a })
+  }
+  for (let x = 0; x < cols; x++) {
+    c.pixel(x, 4, SNOW)
+    c.pixel(x, 6, (x + Math.floor(t / 3)) % 17 === 0 ? 0xe0f0f8 : 0x9fc3dc)
+    c.pixel(x, 7, 0x7fa8c4)
+  }
+  // Glides one way and back, a column a tick.
+  const span = Math.max(1, cols - 12)
+  const k = t % (span * 2)
+  const x = k < span ? k : span * 2 - k
+  const dir = k < span ? 1 : -1
+  c.clawd(WALK_A, x, 1)
+  c.sprite(['kkk..kkk'], x + 1, 6, { k: 0x8a877c }) // skates
+  const tail = dir > 0 ? x - 1 : x + 10
+  c.pixel(tail, 3, 0xc0392b)
+  c.pixel(tail - dir, 3 + (Math.floor(t / 2) % 2), 0xc0392b)
+}
+
 // Cozy room: Clawd at a laptop, a mug, rain on the window.
 function room(c: Canvas, t: number) {
   const { cols, p } = c
@@ -455,20 +508,34 @@ function room(c: Canvas, t: number) {
     for (let x = wx; x < wx + w; x++) {
       if (x === wx || x === wx + w - 1) c.put(x, y, '\u2502', p.wood, pane) // │
       else if (y === 2 && noise(x, 100) < 0.18) c.put(x, y, '\u2584', [0xb89a50, 0x9a6a50, 0x6f8494][Math.floor(noise(x, 101) * 3)]!, pane)
-      else if (noise(x, 102) < 0.4 && (Math.floor(t / 2) + Math.floor(noise(x, 103) * 6)) % 6 === y) c.put(x, y, '|', 0x8fb0c8, pane)
+      else if (c.season === 'winter' && noise(x, 102) < 0.3 && (Math.floor(t / 4) + Math.floor(noise(x, 103) * 6)) % 6 === y) {
+        c.put(x, y, noise(x, 104) < 0.3 ? '*' : '.', SNOW, pane)
+      } else if (c.season !== 'winter' && noise(x, 102) < 0.4 && (Math.floor(t / 2) + Math.floor(noise(x, 103) * 6)) % 6 === y) {
+        c.put(x, y, '|', 0x8fb0c8, pane)
+      }
       else c.put(x, y, ' ', p.ink, pane)
     }
   }
   for (let x = wx - 1; x < wx + w + 1; x++) c.put(x, 3, '\u2580', p.wood) // sill
 }
 
+const HILLS: Record<Season, readonly number[]> = {
+  spring: [0x4f7a3f, 0x5a8a45],
+  summer: [0x3f5a3a, 0x3f5a3a],
+  autumn: [0x8a5a2a, 0x7a6a32, 0x9a4a2a],
+  winter: [0xd8dce0, 0xc8ced4],
+}
+
 // A train rolls along: the land slides back, smoke trails behind.
 function train(c: Canvas, t: number) {
   const { cols, p } = c
+  const hills = HILLS[c.season]
+  if (c.season === 'winter') flakes(c, t, 0.12)
   // Far hills drift slowly, poles rush by.
   for (let x = 0; x < cols; x++) {
-    const h = 1 + Math.floor(noise(Math.floor((x + t / 2) / 7), 110) * 3)
-    for (let py = 6 - h; py < 6; py++) c.pixel(x, py, 0x3f5a3a)
+    const hill = Math.floor((x + t / 2) / 7)
+    const h = 1 + Math.floor(noise(hill, 110) * 3)
+    for (let py = 6 - h; py < 6; py++) c.pixel(x, py, hills[Math.floor(noise(hill, 111) * hills.length)]!)
     if ((x + t * 2) % 19 === 0) for (let py = 0; py < 6; py++) c.pixel(x, py, 0x6b6a64)
     c.pixel(x, 7, 0x8a877c) // rail
   }
@@ -507,7 +574,7 @@ function lighthouse(c: Canvas, t: number) {
   for (let x = 0; x < cols; x++) if (noise(x, 120) < 0.04) c.put(x, 0, '.', p.dim)
   // Rocks with Clawd on them.
   for (let x = 0; x < 16; x++) c.pixel(x, 5, 0x4a4944)
-  for (let x = 1; x < 14; x++) c.pixel(x, 4, 0x4a4944)
+  for (let x = 1; x < 14; x++) c.pixel(x, 4, c.season === 'winter' ? SNOW : 0x4a4944)
   c.clawd(t % 30 < 2 ? BLINK : WALK_A, 3, 0)
   const lx = Math.max(24, Math.floor(cols * 0.42))
   c.sprite(['.yy.', 'wwww', 'rrrr', 'wwww', 'rrrr', 'wwww', 'kkkk'], lx, 0,
@@ -677,7 +744,7 @@ function oops(c: Canvas, t: number) {
 }
 
 const SCENES: Record<SceneName, (c: Canvas, t: number, detail: string) => void> = {
-  meadow, rain, sea, snow, train, autumn, night, city, campfire, space, lighthouse, fireflies, room, fir, gifts, fireworks,
+  meadow, rain, sea, snow, train, autumn, skate, night, city, campfire, space, lighthouse, fireflies, room, fir, gifts, fireworks,
   think, shell, read, edit, web, agent, happy, oops,
 }
 
@@ -709,10 +776,13 @@ export type FrameOptions = {
   // Wipe from this scene: columns right of progress*cols still show it.
   from?: SceneName
   progress?: number
+  // Summer when not given.
+  season?: Season
 }
 
-function draw(scene: SceneName, cols: number, t: number, palette: Palette, detail: string): Canvas {
+function draw(scene: SceneName, cols: number, t: number, palette: Palette, detail: string, season: Season): Canvas {
   const c = new Canvas(cols, palette)
+  c.season = season
   SCENES[scene](c, t, detail)
   return c
 }
@@ -721,9 +791,10 @@ export function frame(scene: SceneName, cols: number, t: number, o: FrameOptions
   cols = Math.max(1, Math.min(512, cols))
   const palette = o.palette ?? DARK
   const detail = o.detail ?? ''
-  const c = draw(scene, cols, t, palette, detail)
+  const season = o.season ?? 'summer'
+  const c = draw(scene, cols, t, palette, detail, season)
   if (o.from && o.from !== scene && (o.progress ?? 1) < 1) {
-    const old = draw(o.from, cols, t, palette, '')
+    const old = draw(o.from, cols, t, palette, '', season)
     const edge = Math.floor((o.progress ?? 0) * cols)
     for (let x = edge; x < cols; x++) {
       for (let y = 0; y < ROWS; y++) c.cells[y * cols + x] = old.cells[y * cols + x]!

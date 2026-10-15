@@ -105,9 +105,11 @@ test('scenes follow the season', async () => {
   expect(october).toContain('autumn')
   expect(october).toContain('rain')
   expect(october).not.toContain('snow')
+  expect(october).not.toContain('skate')
   expect(october).not.toContain('meadow')
   const february = at(2, 1, 12)
   expect(february).toContain('snow')
+  expect(february).toContain('skate')
   expect(february).not.toContain('autumn')
   expect(february).not.toContain('rain')
   expect(at(5, 1, 12)).toContain('meadow')
@@ -135,6 +137,22 @@ test('from 10 December to 14 January every other scene is festive', async () => 
 
 test('every season and hour has scenes to show', async () => {
   for (let month = 1; month <= 12; month++) {
-    for (const hour of [3, 12, 22]) expect(at(month, 15, hour).length).toBeGreaterThanOrEqual(4)
+    for (const hour of [3, 12, 22]) expect(at(month, 15, hour).length).toBeGreaterThanOrEqual(5)
   }
+})
+
+test('scenes seen all year dress for the season', async () => {
+  for (const scene of ['train', 'room', 'night', 'city', 'campfire', 'sea', 'lighthouse'] as const) {
+    expect(frame(scene, 100, 12, { season: 'winter' }), scene).not.toBe(frame(scene, 100, 12, { season: 'summer' }))
+  }
+  expect(frame('meadow', 100, 12, { season: 'spring' })).not.toBe(frame('meadow', 100, 12, { season: 'summer' }))
+  // Summer is the default.
+  expect(frame('train', 100, 12)).toBe(frame('train', 100, 12, { season: 'summer' }))
+})
+
+test('the train passes white hills in winter and green ones in summer', async () => {
+  const hills = (season: 'winter' | 'summer', color: number) => top(frame('train', 120, 8, { season }), 120, 60, 119, color)
+  expect(hills('winter', 0xd8dce0) >= 0 || hills('winter', 0xc8ced4) >= 0).toBe(true)
+  expect(hills('winter', 0x3f5a3a)).toBe(-1)
+  expect(hills('summer', 0x3f5a3a)).toBeGreaterThan(-1)
 })

@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, HookStream, ProcessSpawnChunk, ProcessSpawnResult, Register } from 'claude-code'
 
 import type { Status, Track } from '../types'
-import { DARK, frame, idlePool, LIGHT, ROWS } from './scenes'
+import { DARK, frame, idlePool, LIGHT, ROWS, seasonOf } from './scenes'
 import type { Palette, SceneName, WorkName } from './scenes'
 
 const STREAM = 'https://www.youtube.com/@claude/live'
@@ -60,7 +60,7 @@ function bandFrame(cols: number): string {
   }
   const progress = (band.tick - wipe.at) / WIPE_TICKS
   return frame(scene, cols, band.tick, {
-    label: band.label, palette: band.palette, detail: act?.detail ?? '', from: wipe.from, progress,
+    label: band.label, palette: band.palette, detail: act?.detail ?? '', from: wipe.from, progress, season: seasonOf(new Date()),
   })
 }
 

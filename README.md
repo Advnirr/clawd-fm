@@ -6,7 +6,7 @@
 
 - **Live stream** through `mpv`, with a buffer and automatic reconnects.
 - **Now playing**: the track name is read off the stream's own "now playing" plate and shown in the corner, the way the stream shows it.
-- **Scenes while you listen** follow the time of day and the season, and change in turn with each track. Daytime has a meadow, a cozy room with rain on the window, rain outside, falling leaves, a train ride, a pier and snow. Evening and night have stars, the cozy room, a city, fireflies, a campfire, a lighthouse and a rocket ride through space. From 10 December to 14 January every other scene is festive: a New Year tree with presents, Clawd pulling a sled of gifts, and fireworks at night.
+- **Scenes while you listen** follow the time of day and the season, and change in turn with each track. Daytime has a meadow, a cozy room with rain on the window, rain outside, falling leaves, a train ride, skating on a frozen pond, a pier and snow. Evening and night have stars, the cozy room, a city, fireflies, a campfire, a lighthouse and a rocket ride through space. From 10 December to 14 January every other scene is festive: a New Year tree with presents, Clawd pulling a sled of gifts, and fireworks at night.
 - **Scenes while Claude works** follow what it is doing. Bash shows a terminal with the command typed out. Read and Grep show a page under a magnifier. Edit and Write show Clawd building a wall. WebSearch and WebFetch show Clawd beaming signals to a planet. Agent shows a line of tiny helpers. When nothing else applies, Clawd is thinking.
 - **Reactions**: Clawd jumps when a turn finishes and sweats when a tool fails.
 - **Track list**: every track heard is saved, and `/fm list` prints them with Spotify search links.
@@ -38,7 +38,7 @@ The cozy room with rain on the window, shown both day and night, with the band a
 ![Night](docs/night.png)
 ![Space](docs/space.png)
 
-**Seasons** (northern hemisphere): the meadow shows in spring and summer, falling leaves from September to November, snow from December to February, fireflies on summer nights, and rain in any month but winter's. From 10 December to 14 January the New Year tree, the sled of gifts and fireworks take every other turn.
+**Seasons** (northern hemisphere): the meadow shows in spring and summer, falling leaves from September to November, snow and skating from December to February, fireflies on summer nights, and rain in any month but winter's. From 10 December to 14 January the New Year tree, the sled of gifts and fireworks take every other turn. Scenes seen all year dress for the season too: the train passes white hills in winter and golden ones in autumn, snow falls past the cozy room's window and over the pier and the campfire, and flowers come up in the spring meadow.
 
 **While Claude works**, the scene follows the tool in use, and Clawd jumps when the turn is done:
 
