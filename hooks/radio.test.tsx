@@ -18,13 +18,24 @@ const BAND = {
 
 const RAN = { exitCode: 0, stderr: '', isStdoutTruncated: false, isStderrTruncated: false }
 
-type World = { stored?: Record<string, unknown>; tracks?: string; collected?: string[]; mpvSays?: string; plays?: boolean }
+const DATA = '/home/test/.local/share/clawd-fm'
 
-// Everything beneath the plugin: clock, store, settings, and fake mpv and collector.
+type World = {
+  stored?: Record<string, unknown>
+  files?: Record<string, string>
+  collected?: string[]
+  mpvSays?: string
+  plays?: boolean
+  // What bin/lock.py says, in order, the ms before each: another session holds the lock.
+  lock?: [number, string][]
+}
+
+// Everything beneath the plugin: clock, store, files, settings, and fake mpv, collector and lock.
 function world(on: On, w: World = {}) {
   const clock = mock.clock(on)
-  mock.store(on, w.stored)
   mock.env(on, { HOME: '/home/test' })
+  const store = new Map(Object.entries(w.stored ?? {}))
+  const files = new Map(Object.entries(w.files ?? {}).map(([k, v]) => [`${DATA}/${k}`, v]))
   const spawned: string[][] = []
   const mpvCalls: unknown[][] = []
   let quit = () => {}
@@ -33,8 +44,18 @@ function world(on: On, w: World = {}) {
   on('command.register', async ($, e) => ({ value: { command: e.name } }))
   on('settings.read', async () => ({ value: { theme: 'dark' } }))
   on('ui.blit', async () => ({ value: {} }))
+  on('store.get', async ($, e) => ({ value: store.get(e.key) }))
+  on('store.set', async ($, e) => {
+    store.set(e.key, e.value)
+    return { value: undefined }
+  })
   on('fs.read', async ($, e) => {
-    return w.tracks === undefined ? { deny: `ENOENT: ${e.path}` } : { value: w.tracks }
+    const text = files.get(e.path)
+    return text === undefined ? { deny: `ENOENT: ${e.path}` } : { value: text }
+  })
+  on('fs.write', async ($, e) => {
+    files.set(e.path, e.text)
+    return { value: undefined }
   })
   on('process.run', async ($, e) => {
     if (e.argv[2]?.endsWith('mpvctl.py')) {
@@ -56,11 +77,21 @@ function world(on: On, w: World = {}) {
       await new Promise<void>(resolve => { quit = resolve })
       return { value: { code: 0, signal: null } }
     }
-    for (const line of w.collected ?? []) yield { stream: 'stdout' as const, text: `${line}\n` }
+    if (e.argv[2]?.endsWith('lock.py')) {
+      for (const [ms, text] of w.lock ?? [[0, 'acquired']]) {
+        await clock.sleep(ms)
+        yield { stream: 'stdout' as const, text: `${text}\n` }
+      }
+    } else {
+      for (const line of w.collected ?? []) yield { stream: 'stdout' as const, text: `${line}\n` }
+    }
     await clock.sleep(600_000)
     return { value: { code: 0, signal: null } }
   })
-  return { clock, spawned, mpvCalls }
+  const mpvs = () => spawned.filter(a => a[0] === 'mpv')
+  const file = (name: string) => files.get(`${DATA}/${name}`)
+  const put = (name: string, text: string) => void files.set(`${DATA}/${name}`, text)
+  return { clock, spawned, mpvs, mpvCalls, store, file, put }
 }
 
 async function start($: Engine) {
@@ -178,10 +209,12 @@ test('a playing stream shows the track the collector heard', async ($, on) => {
 
 test('/fm list numbers the tracks in the order heard, with search links', async ($, on) => {
   world(on, {
-    tracks: JSON.stringify([
-      { artist: 'Joya', title: 'Sunday', first_seen: '2026-10-14T12:00:00' },
-      { artist: 'Astor', title: '01 - Drift', first_seen: '2026-10-13T09:00:00' },
-    ]),
+    files: {
+      'tracks.json': JSON.stringify([
+        { artist: 'Joya', title: 'Sunday', first_seen: '2026-10-14T12:00:00' },
+        { artist: 'Astor', title: '01 - Drift', first_seen: '2026-10-13T09:00:00' },
+      ]),
+    },
   })
   await start($)
   const lines = (await $.command.run(fm('list'))).text!.split('\n')
@@ -194,4 +227,74 @@ test('/fm list before anything was heard says so', async ($, on) => {
   world(on)
   await start($)
   expect((await $.command.run(fm('list'))).text).toBe('No tracks yet: they are collected while Claude FM plays.')
+})
+
+test('while another terminal plays, this one starts no mpv and shows its track', async ($, on) => {
+  const { clock, mpvs, file } = world(on, { lock: [[0, 'busy']], files: { 'now.json': '{"artist":"Joya","title":"Sunday"}' } })
+  await start($)
+  await $.command.run(fm())
+  await clock.advance(3000)
+  await clock.advance(3000)
+  expect(mpvs()).toHaveLength(0)
+  const ui = await $.ui.mount({ plugin: 'clawd-fm', surface: 'terminal', ...BAND, props: { ...BAND.props, maxRows: 2 } })
+  expect(await ui.find({ text: '♫ Joya — Sunday · playing in another terminal' })).toBeDefined()
+  expect((await ui.find({ key: 'play' }))?.text).toContain('stop')
+  // Hiding a waiting terminal leaves the playing one alone.
+  await $.command.run(fm('hide'))
+  expect(file('stopped-at')).toBeUndefined()
+  await ui.unmount()
+})
+
+test('a waiting terminal takes the stream over when the playing one closes', async ($, on) => {
+  const { clock, mpvs } = world(on, { lock: [[0, 'busy'], [10_000, 'acquired']] })
+  await start($)
+  await $.command.run(fm())
+  await clock.advance(3000)
+  expect(mpvs()).toHaveLength(0)
+  await clock.advance(12_000)
+  expect(mpvs()).toHaveLength(1)
+  await $.command.run(fm('stop'))
+})
+
+test('the playing terminal shares the track it hears', async ($, on) => {
+  const { clock, file } = world(on, { plays: true, collected: ['{"artist":"Astor","title":"Forest Park"}'] })
+  await start($)
+  await $.command.run(fm())
+  await clock.advance(3000)
+  expect(JSON.parse(file('now.json')!)).toEqual({ artist: 'Astor', title: 'Forest Park' })
+  await $.command.run(fm('stop'))
+})
+
+test('a stop in any terminal stops the player everywhere', async ($, on) => {
+  const { clock, mpvCalls, file, put } = world(on, { plays: true })
+  await start($)
+  await $.command.run(fm())
+  await clock.advance(3000)
+  expect(mpvCalls).not.toContainEqual(['quit'])
+  // Another terminal pressed stop.
+  put('stopped-at', String(clock.now()))
+  await clock.advance(3000)
+  expect(mpvCalls).toContainEqual(['quit'])
+  const ui = await $.ui.mount({ plugin: 'clawd-fm', surface: 'terminal', ...BAND })
+  expect((await ui.find({ key: 'play' }))?.text).toContain('play')
+  await ui.unmount()
+  // And this terminal's own stop is left for the others.
+  await $.command.run(fm())
+  await clock.advance(3000)
+  await $.command.run(fm('stop'))
+  expect(Number(file('stopped-at'))).toBe(clock.now())
+})
+
+test('a volume set in another terminal reaches the player', async ($, on) => {
+  const { clock, mpvCalls, store } = world(on, { plays: true })
+  await start($)
+  await $.command.run(fm())
+  await clock.advance(3000)
+  store.set('volume', 20)
+  await clock.advance(3000)
+  expect(mpvCalls).toContainEqual(['set_property', 'volume', 20])
+  const ui = await $.ui.mount({ plugin: 'clawd-fm', surface: 'terminal', ...BAND })
+  expect(await ui.find({ text: '20%' })).toBeDefined()
+  await ui.unmount()
+  await $.command.run(fm('stop'))
 })

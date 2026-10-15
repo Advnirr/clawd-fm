@@ -1,6 +1,7 @@
 export type Track = { artist: string; title: string }
 
-export type Status = 'off' | 'loading' | 'playing' | 'error'
+// remote: another session plays the stream; this one shows its track.
+export type Status = 'off' | 'loading' | 'playing' | 'error' | 'remote'
 
 declare module 'claude-code' {
   interface PluginState {

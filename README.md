@@ -90,6 +90,8 @@ The cookies are only passed to yt-dlp on your machine. They do give access to th
 
 Keys: press `ctrl+x`, then `tab`, to focus the band. Then `p` plays or stops, `j` and `k` change the volume, `s` changes the scene, and `Esc` returns to the prompt. `[-]` at the band's right edge collapses it.
 
+In several terminals at once, only one plays the stream. The others show its track with "playing in another terminal" and start no second player. Stopping in any terminal stops the radio in all of them, the volume is shared, and when the playing terminal closes, a waiting one takes over.
+
 ## Limitations
 
 - Tested on Linux (Arch / CachyOS). macOS should work with the same tools from Homebrew, but it is untested. Windows is not supported.

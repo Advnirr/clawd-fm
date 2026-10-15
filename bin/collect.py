@@ -12,6 +12,7 @@ import argparse
 import contextlib
 import datetime as dt
 import difflib
+import fcntl
 import functools
 import json
 import os
@@ -153,15 +154,27 @@ class Marquee:
 
 
 class Tracklist:
+    """tracks.json, shared with other collectors: each add re-reads it under a lock."""
+
     def __init__(self, path):
         self.path = path
+        self.tracks = self._load()
+
+    def _load(self):
         try:
-            with open(path, encoding="utf-8") as f:
-                self.tracks = json.load(f)
+            with open(self.path, encoding="utf-8") as f:
+                return json.load(f)
         except FileNotFoundError:
-            self.tracks = []
+            return []
 
     def add(self, artist, title):
+        os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
+        with open(self.path + ".lock", "a", encoding="utf-8") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            self.tracks = self._load()
+            self._add(artist, title)
+
+    def _add(self, artist, title):
         key = norm(artist + title)
         for t in self.tracks:
             if difflib.SequenceMatcher(None, key, norm(t["artist"] + t["title"])).ratio() > 0.9:
@@ -172,8 +185,7 @@ class Tracklist:
             t = {"artist": artist, "title": title, "first_seen": now(), "last_seen": now(), "plays": 1}
             self.tracks.append(t)
             print(f"+ {artist} — {title}", file=sys.stderr, flush=True)
-        os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
-        tmp = self.path + ".tmp"
+        tmp = f"{self.path}.{os.getpid()}.tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(self.tracks, f, ensure_ascii=False, indent=2)
         os.replace(tmp, self.path)

@@ -20,6 +20,9 @@ type Child = HookStream<ProcessSpawnChunk, ProcessSpawnResult>
 let cookies = ''
 let player: Child | null = null
 let collector: Child | null = null
+// One session plays at a time: the one holding the lock bin/lock.py keeps.
+let locker: Child | null = null
+let hasLock = false
 let socket = ''
 let framesDir = ''
 let home = '/tmp'
@@ -104,19 +107,100 @@ async function mpv($: EngineInterface, command: unknown[]) {
 
 // Presses and commands only flip `want`; the watchdog does the slow work.
 let want = false
+let wantSince = 0
 let retryAt = 0
 let backoff = 5000
 
-function play() {
+// Files the sessions share: the lock, the track the player hears, the last stop.
+const shared = (name: string) => `${home}/.local/share/clawd-fm/${name}`
+
+async function play($: EngineInterface) {
   want = true
+  wantSince = await $.clock.now()
   retryAt = 0
 }
 
+// Stops this session only, as when it closes: a waiting one takes the stream over.
 async function stop($: EngineInterface) {
   want = false
   await kill($)
+  release()
   await update($, status, () => 'off')
   await update($, error, () => null)
+}
+
+// A stop the person asked for: every session playing or waiting stops.
+async function stopAll($: EngineInterface) {
+  await $.fs.write(shared('stopped-at'), String(await $.clock.now())).catch(() => null)
+  await stop($)
+}
+
+async function stoppedElsewhere($: EngineInterface): Promise<boolean> {
+  const at = Number(await $.fs.read(shared('stopped-at')).catch(() => ''))
+  return Number.isFinite(at) && at > wantSince
+}
+
+function lock($: EngineInterface) {
+  const child = $.process.spawn({ argv: ['python3', '-I', `${$.plugin.root}/bin/lock.py`, shared('player.lock')] })
+  locker = child
+  void (async () => {
+    try {
+      for await (const { stream, text } of child) {
+        if (locker !== child) break
+        if (stream !== 'stdout') continue
+        if (text.includes('busy')) await update($, status, () => 'remote')
+        if (text.includes('acquired')) {
+          hasLock = true
+          retryAt = 0
+          await $.fs.write(shared('now.json'), 'null').catch(() => null)
+          await update($, status, () => 'loading')
+          void watchdog($)
+        }
+      }
+    } catch { /* lock.py died; the watchdog starts it again */ }
+    if (locker !== child) return
+    locker = null
+    // Without the lock another session may start playing: never two players.
+    if (hasLock) {
+      hasLock = false
+      await kill($)
+    }
+  })()
+}
+
+function release() {
+  const child = locker
+  locker = null
+  hasLock = false
+  if (child) void child.return(undefined as never)
+}
+
+// While another session plays, show the track it hears.
+async function follow($: EngineInterface) {
+  try {
+    const now = JSON.parse(await $.fs.read(shared('now.json'))) as Track | null
+    if (now?.artist && now.title) await setTrack($, now)
+  } catch { /* nothing heard yet */ }
+}
+
+async function setTrack($: EngineInterface, now: Track) {
+  const prev = await read($, track)
+  if (prev?.artist === now.artist && prev.title === now.title) return
+  // A corrected name of the same track keeps the scene.
+  const isSame = prev !== null && prev.title.slice(0, 8) === now.title.slice(0, 8)
+  await update($, track, () => now)
+  // Next scene in turn, so none repeats before all were shown.
+  if (!isSame) await update($, scene, n => n + 1)
+  if (hasLock) await $.fs.write(shared('now.json'), JSON.stringify(now)).catch(() => null)
+}
+
+// The volume is shared too: a change in any session reaches the player.
+async function syncVolume($: EngineInterface) {
+  const v = await $.store.get('volume').catch(() => undefined)
+  if (typeof v !== 'number' || v === volumeNow) return
+  volumeNow = v
+  await update($, volume, () => v)
+  await mpv($, ['set_property', 'volume', v])
 }
 
 async function kill($: EngineInterface) {
@@ -184,8 +268,37 @@ export function explain(said: string): string | null {
 }
 
 // Runs every few seconds: starts, checks and restarts the player.
+// One check at a time; a call during one runs another right after it.
+let isChecking = false
+let checkAgain = false
 async function watchdog($: EngineInterface) {
+  if (isChecking) {
+    checkAgain = true
+    return
+  }
+  isChecking = true
+  try {
+    do {
+      checkAgain = false
+      await check($)
+    } while (checkAgain)
+  } finally {
+    isChecking = false
+  }
+}
+
+async function check($: EngineInterface) {
+  await syncVolume($)
   if (!want) return
+  if (await stoppedElsewhere($)) {
+    await stop($)
+    return
+  }
+  if (!hasLock) {
+    if (!locker) lock($)
+    await follow($)
+    return
+  }
   const now = await $.clock.now()
   if (!player) {
     if (now < retryAt) return
@@ -229,15 +342,13 @@ function startCollector($: EngineInterface) {
         const lines = buf.split('\n')
         buf = lines.pop() ?? ''
         for (const line of lines) {
+          let now: Track
           try {
-            const now = JSON.parse(line) as Track
-            const prev = await read($, track)
-            // A corrected name of the same track keeps the scene.
-            const isSame = prev !== null && prev.title.slice(0, 8) === now.title.slice(0, 8)
-            await update($, track, () => now)
-            // Next scene in turn, so none repeats before all were shown.
-            if (!isSame) await update($, scene, n => n + 1)
-          } catch { /* not a track line */ }
+            now = JSON.parse(line) as Track
+          } catch {
+            continue // not a track line
+          }
+          await setTrack($, now)
         }
       }
     } catch { /* collector died; the watchdog restarts it */ }
@@ -275,7 +386,7 @@ export const register: Register = (on, options) => {
       await update($, volume, () => saved)
     }
     // A reload kills the old mpv; bring it back.
-    if ((await read($, status)) !== 'off') play()
+    if ((await read($, status)) !== 'off') await play($)
     $.clock.every(3000, () => void watchdog($))
     const { theme } = await $.settings.read()
     band.palette = String(theme ?? '').includes('light') ? LIGHT : DARK
@@ -291,11 +402,12 @@ export const register: Register = (on, options) => {
     const [cmd = '', value = ''] = e.args.trim().split(/\s+/)
     const shown = await read($, isShown)
     if (cmd === 'stop') {
-      await stop($)
+      await stopAll($)
       return { text: 'Claude FM stopped.' }
     }
     if (cmd === 'hide' || (!cmd && shown)) {
-      await stop($)
+      // Hiding a session that only waits leaves the one playing alone.
+      await (hasLock ? stopAll($) : stop($))
       await update($, isShown, () => false)
       return { text: 'Claude FM off.' }
     }
@@ -310,7 +422,7 @@ export const register: Register = (on, options) => {
       return { text: 'Next scene.' }
     }
     await update($, isShown, () => true)
-    play()
+    await play($)
     return { text: 'Claude FM on: tuning in…' }
   })
 
@@ -361,9 +473,11 @@ export const register: Register = (on, options) => {
     const note = st === 'loading' ? (err ? `${err} · retrying` : 'tuning in…')
       : st === 'error' ? `error: ${err ?? 'unknown'}`
       : st === 'off' ? 'off air'
+      : st === 'remote' ? 'playing in another terminal'
       : name ? '' : 'listening for the track name…'
-    band.label = st === 'playing' ? name : ''
-    const isOn = st === 'playing' || st === 'loading'
+    band.label = st === 'playing' || st === 'remote' ? name : ''
+    const isOn = st === 'playing' || st === 'loading' || st === 'remote'
+    const line = hasScene ? note : st === 'remote' && name ? `♫ ${name} · ${note}` : note || `♫ ${name}`
 
     return (
       <Box flexDirection="column">
@@ -378,7 +492,7 @@ export const register: Register = (on, options) => {
         <Box>
           <Box flexShrink={0}>
           <Text> </Text>
-          <Button key="play" hotkey="p" plain onPress={() => void (want ? stop($) : play())}>
+          <Button key="play" hotkey="p" plain onPress={() => void (want ? stopAll($) : play($))}>
             {isOn ? '■ stop' : '▶ play'}
           </Button>
           <Text dimColor>{'   '}</Text>
@@ -391,7 +505,7 @@ export const register: Register = (on, options) => {
           </Button>
           </Box>
           <Text dimColor wrap="truncate-end">
-            {'   '}{hasScene ? note : note || `♫ ${name}`}
+            {'   '}{line}
           </Text>
         </Box>
       </Box>

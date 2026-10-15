@@ -8,6 +8,8 @@ import importlib.util
 import io
 import json
 import pathlib
+import subprocess  # nosec B404
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -127,6 +129,34 @@ class TracklistTest(unittest.TestCase):
         tl.add("Ardley", "Lanterns")
         self.assertEqual(self.read()[0]["plays"], 2)
         self.assertFalse(pathlib.Path(self.path + ".tmp").exists())
+
+    def test_two_collectors_keep_each_others_tracks(self):
+        first, second = collect.Tracklist(self.path), collect.Tracklist(self.path)
+        first.add("Joya", "Oregold")
+        second.add("Astor", "Midnight Tourist")
+        first.add("Joya", "Oregold")
+        plays = [(t["artist"], t["plays"]) for t in self.read()]
+        self.assertEqual(plays, [("Joya", 2), ("Astor", 1)])
+
+
+class LockTest(unittest.TestCase):
+    def start(self, path):
+        argv = [sys.executable, "-I", str(ROOT / "bin" / "lock.py"), path]
+        child = subprocess.Popen(argv, stdout=subprocess.PIPE, text=True)  # noqa: S603  # nosec B603
+        self.addCleanup(child.wait)
+        self.addCleanup(child.kill)
+        return child
+
+    def test_one_holder_at_a_time_and_the_next_takes_over(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = str(pathlib.Path(d) / "player.lock")
+            first = self.start(path)
+            self.assertEqual(first.stdout.readline(), "acquired\n")
+            second = self.start(path)
+            self.assertEqual(second.stdout.readline(), "busy\n")
+            first.kill()
+            first.wait()
+            self.assertEqual(second.stdout.readline(), "acquired\n")
 
 
 class FilterTest(unittest.TestCase):
