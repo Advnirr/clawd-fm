@@ -6,13 +6,36 @@ const PX_ROWS = ROWS * 2
 
 export type WorkName = 'think' | 'shell' | 'read' | 'edit' | 'web' | 'agent' | 'happy' | 'oops'
 export type IdleName =
-  | 'meadow' | 'rain' | 'sea' | 'snow' | 'train'
+  | 'meadow' | 'rain' | 'sea' | 'snow' | 'train' | 'autumn'
   | 'night' | 'city' | 'campfire' | 'space' | 'lighthouse' | 'fireflies'
-  | 'room'
+  | 'room' | 'fir' | 'gifts' | 'fireworks'
 export type SceneName = IdleName | WorkName
-export const DAY_SCENES: readonly IdleName[] = ['meadow', 'room', 'rain', 'train', 'sea', 'snow']
+export const DAY_SCENES: readonly IdleName[] = ['meadow', 'room', 'rain', 'autumn', 'train', 'sea', 'snow']
 export const NIGHT_SCENES: readonly IdleName[] = ['night', 'room', 'city', 'fireflies', 'campfire', 'lighthouse', 'space']
-export const IDLE_SCENES: readonly IdleName[] = [...new Set([...DAY_SCENES, ...NIGHT_SCENES])]
+// Shown from 10 December to 14 January, every other scene.
+const HOLIDAY_DAY: readonly IdleName[] = ['fir', 'gifts']
+const HOLIDAY_NIGHT: readonly IdleName[] = ['fir', 'fireworks']
+export const IDLE_SCENES: readonly IdleName[] = [...new Set([...DAY_SCENES, ...NIGHT_SCENES, ...HOLIDAY_DAY, ...HOLIDAY_NIGHT])]
+
+// Months a scene belongs to (northern hemisphere); the rest show all year.
+const MONTHS: Partial<Record<IdleName, readonly number[]>> = {
+  meadow: [3, 4, 5, 6, 7, 8],
+  rain: [3, 4, 5, 6, 7, 8, 9, 10, 11],
+  autumn: [9, 10, 11],
+  snow: [12, 1, 2],
+  fireflies: [6, 7, 8],
+}
+
+// The scenes to take turns at this date and hour: day ones from 7:00 to 20:00.
+export function idlePool(d: Date): readonly IdleName[] {
+  const month = d.getMonth() + 1
+  const isDay = d.getHours() >= 7 && d.getHours() < 20
+  const pool = (isDay ? DAY_SCENES : NIGHT_SCENES).filter(s => MONTHS[s]?.includes(month) ?? true)
+  const isHoliday = (month === 12 && d.getDate() >= 10) || (month === 1 && d.getDate() <= 14)
+  if (!isHoliday) return pool
+  const festive = isDay ? HOLIDAY_DAY : HOLIDAY_NIGHT
+  return pool.flatMap((s, i) => [festive[i % festive.length]!, s])
+}
 
 // Terminal's own background.
 const NONE = 0x01000000
@@ -230,9 +253,9 @@ function sea(c: Canvas, t: number) {
   if (bob) c.put(16, 2, '|', p.ink, p.water)
 }
 
-function snow(c: Canvas, t: number) {
+// Flakes drift down; each column has its own phase. Snow lies on the ground.
+function snowfall(c: Canvas, t: number) {
   const { cols, p } = c
-  // Flakes drift down; each column has its own phase.
   for (let x = 0; x < cols; x++) {
     if (noise(x, 60) > 0.25) continue
     const y = (Math.floor(t / 3) + Math.floor(noise(x, 61) * 8)) % 6
@@ -240,6 +263,11 @@ function snow(c: Canvas, t: number) {
     if (y < 3) c.put(x + dx, y, noise(x, 63) < 0.3 ? '*' : '.', p.bright)
   }
   for (let x = 0; x < cols; x++) c.pixel(x, 7, 0xe8e6dc)
+}
+
+function snow(c: Canvas, t: number) {
+  const { cols } = c
+  snowfall(c, t)
   const sx = Math.floor(cols * 0.5)
   c.sprite(['.www.', 'wkwkw', '.www.', 'wwwww', 'wwwww'], sx, 2, { w: 0xf0eee6, k: 0x1f1e1d })
   c.pixel(sx + 5, 3, 0xd97757) // carrot
@@ -312,6 +340,100 @@ function space(c: Canvas, t: number) {
   for (let i = 0; i < len; i++) c.pixel(x - 1 - i, 6, flame[Math.min(2, i)]!)
   if (t % 2) c.pixel(x - 1, 5, 0xe8a33d)
   else c.pixel(x - 1, 7, 0xe8a33d)
+}
+
+const LEAVES = [0xd9822b, 0xc0392b, 0xe8b53d, 0xa0522d]
+
+// Autumn: trees drop their leaves, Clawd walks through them.
+function autumn(c: Canvas, t: number) {
+  const { cols } = c
+  const crown = ['..lllll..', '.lllllll.', 'lllllllll', 'lllllllll', '.lllllll.']
+  for (let tx = 4; tx < cols; tx += 26 + Math.floor(noise(tx, 130) * 12)) {
+    crown.forEach((row, py) => {
+      for (let i = 0; i < row.length; i++) if (row[i] === 'l') c.pixel(tx + i, py, LEAVES[Math.floor(noise(tx + i, py + 131) * 4)]!)
+    })
+    c.sprite(['.b.b.', '..b..'], tx + 2, 5, { b: 0x6b4a32 })
+    c.pixel(tx + 4, 7, 0x6b4a32)
+  }
+  // Leaves fall slowly, drifting left and swaying.
+  for (let i = 0; i < Math.floor(cols / 5); i++) {
+    const fall = (Math.floor(t / 3) + Math.floor(noise(i, 132) * 16)) % 16
+    if (fall > 6) continue
+    const x = Math.floor(noise(i, 133) * cols) - Math.floor(fall / 2) + (Math.floor(t / 4 + i) % 2)
+    c.pixel(x, fall, LEAVES[i % 4]!)
+  }
+  for (let x = 0; x < cols; x++) c.pixel(x, 7, noise(x, 134) < 0.5 ? LEAVES[Math.floor(noise(x, 135) * 4)]! : 0x6b5a3a)
+  c.clawd(Math.floor(t / 2) % 2 ? WALK_B : WALK_A, walkerX(cols, t, 2), 2)
+}
+
+const GARLAND = [0xe84a4a, 0xf0d060, 0x5ab0e8, 0x7ad07a]
+
+// A New Year tree: blinking garland, a star, presents, Clawd beside them.
+function fir(c: Canvas, t: number) {
+  const { cols } = c
+  snowfall(c, t)
+  const fx = Math.max(6, Math.floor(cols * 0.3))
+  const tree = ['.....s.....', '....ggg....', '...ggggg...', '....ggg....', '..ggggggg..', '.ggggggggg.', 'ggggggggggg', '.....b.....']
+  c.sprite(tree, fx, 0, { s: t % 8 < 6 ? 0xf0d060 : 0xfff0a0, g: 0x2f6b3a, b: 0x6b4a32 })
+  tree.forEach((row, py) => {
+    for (let dx = 0; dx < row.length; dx++) {
+      if (row[dx] === 'g' && (dx * 3 + py * 2) % 5 === 0) c.pixel(fx + dx, py, GARLAND[(dx + py + Math.floor(t / 3)) % 4]!)
+    }
+  })
+  c.sprite(['ryr', 'ryr'], fx + 12, 5, { r: 0xc0392b, y: 0xf0d060 })
+  c.sprite(['bbwb', 'bbwb'], fx + 16, 5, { b: 0x3f6fb0, w: 0xf0eee6 })
+  c.sprite(['gy', 'gy'], fx - 3, 5, { g: 0x4f9a5a, y: 0xf0d060 })
+  const hop = t % 40 >= 36 ? 1 : 0
+  c.clawd(t % 30 < 2 ? BLINK : WALK_A, fx + 22, 2 - hop)
+}
+
+// Clawd pulls a sled of presents through the snow.
+function gifts(c: Canvas, t: number) {
+  const { cols } = c
+  snowfall(c, t)
+  const x = walkerX(cols + 14, t, 2)
+  const sx = x - 14
+  c.sprite(['..rrr......', '..ryr.bbb..', 'ggryr.bwb..', 'ggrrr.bbb..', 'wwwwwwwwwww'], sx, 2,
+    { r: 0xc0392b, y: 0xf0d060, b: 0x3f6fb0, w: 0x8a6a4a, g: 0x4f9a5a })
+  c.pixel(sx + 11, 5, 0x8a6a4a) // the sled's curled front
+  c.sprite(['..k', 'kk.'], sx + 11, 3, { k: 0x8a877c }) // rope
+  c.clawd(Math.floor(t / 2) % 2 ? WALK_B : WALK_A, x, 2)
+}
+
+// Fireworks over the night; Clawd watches from below.
+function fireworks(c: Canvas, t: number) {
+  const { cols, p } = c
+  for (let x = 0; x < cols; x++) {
+    if (noise(x, 140) < 0.03) c.put(x, Math.floor(noise(x, 141) * 2), '.', p.dim)
+    c.put(x, 3, noise(x, 142) < 0.3 ? ',' : '_', p.dim)
+  }
+  const watcher = Math.max(2, Math.floor(cols * 0.15))
+  for (let i = 0; i < Math.max(2, Math.floor(cols / 25)); i++) {
+    const period = 26
+    const phase = (t + Math.floor(noise(i, 143) * period)) % period
+    const shot = Math.floor((t + Math.floor(noise(i, 143) * period)) / period)
+    const cx = watcher + 14 + Math.floor(noise(i * 13 + shot, 144) * Math.max(1, cols - watcher - 20))
+    const cy = noise(i, shot + 145) < 0.5 ? 0 : 1
+    const color = GARLAND[(i + shot) % 4]!
+    if (phase < 4) {
+      c.put(cx, 3 - Math.floor(phase / 2), '|', p.bright) // the rocket rising
+      continue
+    }
+    const r = Math.floor((phase - 4) / 2)
+    if (r > 5) continue
+    const glow = r < 4 ? color : mix(color, p.dim, 0.6)
+    c.put(cx, cy, r < 2 ? '*' : '.', r < 2 ? p.bright : glow)
+    // Spokes: the inner sparks trail the outer ones.
+    for (let k = 0; k < 12 && r > 0; k++) {
+      const a = (k / 12) * Math.PI * 2
+      for (const d of [r, r - 1.5]) {
+        if (d <= 0) continue
+        const ch = d === r ? (r < 3 ? '*' : r < 5 ? '+' : '.') : '·'
+        c.put(cx + Math.round(Math.cos(a) * d * 2), cy + Math.round(Math.sin(a) * d * 0.6), ch, d === r ? glow : mix(color, p.dim, 0.4))
+      }
+    }
+  }
+  c.clawd(t % 30 < 2 ? BLINK : WALK_A, watcher, 1)
 }
 
 // Cozy room: Clawd at a laptop, a mug, rain on the window.
@@ -555,7 +677,8 @@ function oops(c: Canvas, t: number) {
 }
 
 const SCENES: Record<SceneName, (c: Canvas, t: number, detail: string) => void> = {
-  meadow, rain, sea, snow, train, night, city, campfire, space, lighthouse, fireflies, room, think, shell, read, edit, web, agent, happy, oops,
+  meadow, rain, sea, snow, train, autumn, night, city, campfire, space, lighthouse, fireflies, room, fir, gifts, fireworks,
+  think, shell, read, edit, web, agent, happy, oops,
 }
 
 // "♫ label" on a dark plate in the top-right corner, scrolling when long.

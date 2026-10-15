@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, HookStream, ProcessSpawnChunk, ProcessSpawnResult, Register } from 'claude-code'
 
 import type { Status, Track } from '../types'
-import { DARK, DAY_SCENES, frame, LIGHT, NIGHT_SCENES, ROWS } from './scenes'
+import { DARK, frame, idlePool, LIGHT, ROWS } from './scenes'
 import type { Palette, SceneName, WorkName } from './scenes'
 
 const STREAM = 'https://www.youtube.com/@claude/live'
@@ -530,9 +530,8 @@ async function trackList($: EngineInterface): Promise<string> {
   return [`Claude FM: ${tracks.length} tracks heard`, ...lines].join('\n')
 }
 
-// Day scenes from 7:00 to 20:00, night scenes otherwise.
+// The scenes of this hour and season, in turn.
 function idleScene(idx: number): SceneName {
-  const hour = new Date().getHours()
-  const pool = hour >= 7 && hour < 20 ? DAY_SCENES : NIGHT_SCENES
-  return pool[idx % pool.length] ?? 'meadow'
+  const pool = idlePool(new Date())
+  return pool[idx % pool.length] ?? 'room'
 }

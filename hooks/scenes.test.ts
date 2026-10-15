@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { DARK, frame, LIGHT, ROWS } from './scenes'
+import { DARK, frame, idlePool, LIGHT, ROWS } from './scenes'
 
 const CLAWD = 0xd97757
 const NONE = 0x01000000
@@ -96,4 +96,45 @@ test('a work caption shows beside the scene, and not under a shell command', asy
 
 test('the light palette changes the drawing', async () => {
   expect(frame('meadow', 80, 4, { palette: LIGHT })).not.toBe(frame('meadow', 80, 4, { palette: DARK }))
+})
+
+const at = (month: number, day: number, hour: number) => idlePool(new Date(2026, month - 1, day, hour))
+
+test('scenes follow the season', async () => {
+  const october = at(10, 15, 12)
+  expect(october).toContain('autumn')
+  expect(october).toContain('rain')
+  expect(october).not.toContain('snow')
+  expect(october).not.toContain('meadow')
+  const february = at(2, 1, 12)
+  expect(february).toContain('snow')
+  expect(february).not.toContain('autumn')
+  expect(february).not.toContain('rain')
+  expect(at(5, 1, 12)).toContain('meadow')
+  expect(at(7, 1, 23)).toContain('fireflies')
+  expect(at(11, 1, 23)).not.toContain('fireflies')
+  // Day from 7:00 to 20:00.
+  expect(at(10, 15, 7)).toContain('train')
+  expect(at(10, 15, 20)).toContain('city')
+})
+
+test('from 10 December to 14 January every other scene is festive', async () => {
+  for (const [month, day] of [[12, 10], [12, 31], [1, 14]] as const) {
+    const days = at(month, day, 12)
+    const nights = at(month, day, 23)
+    expect(days.filter((_, i) => i % 2 === 0).every(s => s === 'fir' || s === 'gifts')).toBe(true)
+    expect(days).toContain('gifts')
+    expect(nights.filter((_, i) => i % 2 === 0).every(s => s === 'fir' || s === 'fireworks')).toBe(true)
+    expect(nights).toContain('fireworks')
+  }
+  for (const [month, day] of [[12, 9], [1, 15]] as const) {
+    expect(at(month, day, 12)).not.toContain('fir')
+    expect(at(month, day, 23)).not.toContain('fireworks')
+  }
+})
+
+test('every season and hour has scenes to show', async () => {
+  for (let month = 1; month <= 12; month++) {
+    for (const hour of [3, 12, 22]) expect(at(month, 15, hour).length).toBeGreaterThanOrEqual(4)
+  }
 })
