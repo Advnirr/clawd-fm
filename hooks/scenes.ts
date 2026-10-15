@@ -81,9 +81,6 @@ const WALK_A = ['.oooooooo.', '.ookookoo.', 'oooooooooo', '.oooooooo.', '.o.o..o
 const WALK_B = ['.oooooooo.', '.ookookoo.', 'oooooooooo', '.oooooooo.', '..o.oo.o..']
 const BLINK = ['.oooooooo.', '.oooooooo.', 'oooooooooo', '.oooooooo.', '.o.o..o.o.']
 const TYPE_B = ['.oooooooo.', 'oookookooo', '.oooooooo.', '.oooooooo.', '.o.o..o.o.']
-// Helpers, 6x3 px.
-const MINI_A = ['.oooo.', 'okooko', '.o..o.']
-const MINI_B = ['.oooo.', 'okooko', 'o....o']
 // Walking helpers, 6x4 px: a body row above the legs.
 const HELPER_A = ['.oooo.', 'okooko', 'oooooo', '.o..o.']
 const HELPER_B = ['.oooo.', 'okooko', 'oooooo', 'o....o']
@@ -553,9 +550,8 @@ function train(c: Canvas, t: number) {
   const colors = { b: 0x8c3a2e, w: 0xe8d8a0, r: 0x5a2a22 }
   c.sprite(car, x0, 1 + bump(2), colors)
   c.sprite(car, x0 + 19, 1 + bump(1), colors)
-  c.sprite(MINI_A, x0 + 20, 2 + bump(1), { o: CLAWD, k: p.eye }) // Clawd at a window
-  c.pixel(x0 + 20, 3 + bump(1), 0xe8d8a0)
-  c.pixel(x0 + 25, 3 + bump(1), 0xe8d8a0)
+  // Clawd sits at a window: arms out, no legs showing.
+  c.sprite(['.oooo.', 'okooko', '.oooo.'], x0 + 21, 2 + bump(1), { o: CLAWD, k: p.eye })
   // Locomotive with a chimney.
   const lx = x0 + 38
   c.sprite(['..........kk.', 'cccc......kk.', 'cwwcsssssssss', 'ccccssssssssn', 'rrrrrrrrrrrrr'], lx, 1 + bump(0),
