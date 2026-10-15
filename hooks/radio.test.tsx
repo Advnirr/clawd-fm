@@ -265,6 +265,20 @@ test('the playing terminal shares the track it hears', async ($, on) => {
   await $.command.run(fm('stop'))
 })
 
+test('after a restart the same track is shared again', async ($, on) => {
+  const { clock, file } = world(on, { plays: true, collected: ['{"artist":"Astor","title":"Forest Park"}'] })
+  await start($)
+  await $.command.run(fm())
+  await clock.advance(3000)
+  await $.command.run(fm('stop'))
+  await clock.advance(1)
+  // Playing again: the lock clears now.json, the collector hears the same track.
+  await $.command.run(fm('play'))
+  await clock.advance(3000)
+  expect(JSON.parse(file('now.json')!)).toEqual({ artist: 'Astor', title: 'Forest Park' })
+  await $.command.run(fm('stop'))
+})
+
 test('a stop in any terminal stops the player everywhere', async ($, on) => {
   const { clock, mpvCalls, file, put } = world(on, { plays: true })
   await start($)

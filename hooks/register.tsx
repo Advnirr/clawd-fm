@@ -184,6 +184,8 @@ async function follow($: EngineInterface) {
 }
 
 async function setTrack($: EngineInterface, now: Track) {
+  // Shared even when unchanged: the lock was just taken with now.json cleared.
+  if (hasLock) await $.fs.write(shared('now.json'), JSON.stringify(now)).catch(() => null)
   const prev = await read($, track)
   if (prev?.artist === now.artist && prev.title === now.title) return
   // A corrected name of the same track keeps the scene.
@@ -191,7 +193,6 @@ async function setTrack($: EngineInterface, now: Track) {
   await update($, track, () => now)
   // Next scene in turn, so none repeats before all were shown.
   if (!isSame) await update($, scene, n => n + 1)
-  if (hasLock) await $.fs.write(shared('now.json'), JSON.stringify(now)).catch(() => null)
 }
 
 // The volume is shared too: a change in any session reaches the player.
