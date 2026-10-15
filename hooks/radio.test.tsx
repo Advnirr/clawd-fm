@@ -3,6 +3,7 @@ import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 import { explain, workOf } from './register'
+import { TEXT } from './testing'
 
 const BAND = {
   component: 'AbovePrompt',
@@ -310,5 +311,55 @@ test('a volume set in another terminal reaches the player', async ($, on) => {
   const ui = await $.ui.mount({ plugin: 'clawd-fm', surface: 'terminal', ...BAND })
   expect(await ui.find({ text: '20%' })).toBeDefined()
   await ui.unmount()
+  await $.command.run(fm('stop'))
+})
+
+// What the band's scene shows as text, mounted wide enough for captions.
+async function caption($: Engine) {
+  const ui = await $.ui.mount({ plugin: 'clawd-fm', surface: 'terminal', ...BAND, props: { ...BAND.props, bodyColumns: 120 } })
+  const raster = await ui.find({ type: 'Raster' })
+  await ui.unmount()
+  return TEXT(String(raster?.props.cells ?? ''))
+}
+
+// A call from a subagent's loop: the engine stamps agentId, a test passes it.
+const fromAgent = ($: Engine, agentId: string, input: Record<string, unknown>) =>
+  $.tool.call({ tool_use_id: `u-${agentId}`, ...input, agentId } as never)
+
+function answering(on: On) {
+  on('tool.call', async () => ({ result: 'ok' as never, text: 'ok' }))
+  on('turn.complete', async () => ({ text: '' }))
+}
+
+const turnEnd = (agentId?: string) => ({ answer: 'ok', durationMs: 1, isAborted: false, turnId: 't', reason: 'answer' as const, agentId })
+
+test('a subagent at work shows as a helper, not as Clawd himself', async ($, on) => {
+  world(on)
+  answering(on)
+  await start($)
+  await $.command.run(fm())
+  await fromAgent($, 'sub-1', { tool: 'Read', file_path: '/tmp/notes.txt' })
+  // The caption's shimmer skips spaces, so the scene shows through them.
+  expect(await caption($)).toMatch(/helper.{3}reading notes\.txt/)
+  await fromAgent($, 'sub-2', { tool: 'Grep', pattern: 'law' })
+  expect(await caption($)).toMatch(/2 helpers.{3}grep law/)
+  // Its turn ends: no jump for Clawd, the other helper still shows.
+  await $.turn.complete(turnEnd('sub-2'))
+  const text = await caption($)
+  expect(text).not.toContain('done!')
+  expect(text).toMatch(/[^2] helper.{3}reading notes\.txt/)
+  await $.command.run(fm('stop'))
+})
+
+test('the main loop\'s own work still shows as Clawd at work', async ($, on) => {
+  world(on)
+  answering(on)
+  await start($)
+  await $.command.run(fm())
+  await fromAgent($, 'sub-1', { tool: 'Read', file_path: '/tmp/notes.txt' })
+  await $.tool.call({ tool: 'Edit', tool_use_id: 'u2', file_path: '/tmp/main.ts', old_string: 'a', new_string: 'b' })
+  const text = await caption($)
+  expect(text).toContain('editing main.ts')
+  expect(text).not.toContain('helper')
   await $.command.run(fm('stop'))
 })

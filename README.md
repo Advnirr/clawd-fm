@@ -7,7 +7,7 @@
 - **Live stream** through `mpv`, with a buffer and automatic reconnects.
 - **Now playing**: the track name is read off the stream's own "now playing" plate and shown in the corner, the way the stream shows it.
 - **Scenes while you listen** follow the time of day and the season, and change in turn with each track. Daytime has a meadow, a cozy room with rain on the window, rain outside, falling leaves, a train ride, skating on a frozen pond, a pier and snow. Evening and night have stars, the cozy room, a city, fireflies, a campfire, a lighthouse and a rocket ride through space. From 10 December to 14 January every other scene is festive: a New Year tree with presents, Clawd pulling a sled of gifts, and fireworks at night.
-- **Scenes while Claude works** follow what it is doing. Bash shows a terminal with the command typed out. Read and Grep show a page under a magnifier. Edit and Write show Clawd building a wall. WebSearch and WebFetch show Clawd beaming signals to a planet. Agent shows a line of tiny helpers. When nothing else applies, Clawd is thinking.
+- **Scenes while Claude works** follow what it is doing. Bash shows a terminal with the command typed out. Read and Grep show a page under a magnifier. Edit and Write show Clawd building a wall. WebSearch and WebFetch show Clawd beaming signals to a planet. Agent shows a line of tiny helpers, and what subagents do shows there too, as "helper · reading notes.txt", never as Clawd's own work. When nothing else applies, Clawd is thinking.
 - **Reactions**: Clawd jumps when a turn finishes and sweats when a tool fails.
 - **Track list**: every track heard is saved, and `/fm list` prints them with Spotify search links.
 

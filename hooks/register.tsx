@@ -50,8 +50,22 @@ function currentWork(): Activity | undefined {
 const WIPE_TICKS = 6
 const wipe = { scene: 'meadow' as SceneName, from: 'meadow' as SceneName, at: -WIPE_TICKS }
 
+// What subagents do, by agent id: shown as helpers at work, never as Clawd's own.
+const helpers = new Map<string, { detail: string; tick: number }>()
+// A helper silent this long (a minute) has likely finished unseen.
+const HELPER_TICKS = 240
+
+function helperWork(): { kind: WorkName; detail: string } | undefined {
+  for (const [id, h] of helpers) if (band.tick - h.tick > HELPER_TICKS) helpers.delete(id)
+  let latest: { detail: string; tick: number } | undefined
+  for (const h of helpers.values()) if (!latest || h.tick >= latest.tick) latest = h
+  if (!latest) return undefined
+  const who = helpers.size > 1 ? `${helpers.size} helpers` : 'helper'
+  return { kind: 'agent', detail: `${who} · ${latest.detail}` }
+}
+
 function bandFrame(cols: number): string {
-  const act = currentWork()
+  const act = currentWork() ?? helperWork()
   const scene = act?.kind ?? (band.working ? 'think' : band.scene)
   if (scene !== wipe.scene) {
     wipe.from = wipe.scene
@@ -429,7 +443,12 @@ export const register: Register = (on, options) => {
 
   // Watch tools only to pick the work scene; never changes the call.
   on('tool.call', async ($, e, next) => {
-    const act: Activity = { ...workOf(String(e.tool), e as unknown as Record<string, unknown>), isDone: false, shownAt: null }
+    const work = workOf(String(e.tool), e as unknown as Record<string, unknown>)
+    if (e.agentId) {
+      helpers.set(e.agentId, { detail: work.detail, tick: band.tick })
+      return next(e)
+    }
+    const act: Activity = { ...work, isDone: false, shownAt: null }
     queue.push(act)
     if (queue.length > 4) queue.splice(1, 1) // keep the backlog short
     try {
@@ -443,6 +462,11 @@ export const register: Register = (on, options) => {
   }).catch(($, e, next) => next(e))
 
   on('turn.complete', async ($, e, next) => {
+    // A subagent's turn ends its helper scene; reactions are for the main loop.
+    if (e.agentId) {
+      helpers.delete(e.agentId)
+      return next(e)
+    }
     if (e.reason === 'answer') react('happy')
     else if (e.reason === 'error') react('oops')
     return next(e)
