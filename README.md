@@ -1,5 +1,7 @@
 # clawd-fm
 
+**English** · [Русский](README.ru.md)
+
 [Claude FM](https://www.youtube.com/@claude/live), the lofi radio for thinking and building, playing right inside Claude Code. A band above the prompt shows Clawd in small animated scenes, the current track, and volume controls.
 
 - **Live stream** through `mpv`, with a buffer and automatic reconnects.
@@ -72,7 +74,7 @@ claude plugin install clawd-fm --marketplace Advnirr/clawd-fm
 YouTube often answers yt-dlp with "Sign in to confirm you're not a bot", and the band then says so. If that happens, let yt-dlp borrow your browser's YouTube cookies. Run `/plugin configure clawd-fm@clawd-fm` and set **Cookies from browser**, or pass it when installing from a shell: `claude plugin install clawd-fm@clawd-fm --config cookiesFromBrowser=firefox`. The value is one of:
 
 - `firefox`, `chrome`, `brave`, and so on, for the browser's default profile
-- `firefox:/path/to/profile` for one exact profile. Firefox forks such as Zen keep their profiles in their own folders, for example `~/.config/zen/xxxx.default-release`.
+- `firefox:/path/to/profile` for one exact profile. Firefox forks such as Zen keep their profiles in their own folders, for example `~/.config/zen/xxxx.default-release`. Write the engine's name, `firefox`, not the fork's: yt-dlp does not know `zen`, and the band says so.
 
 The cookies are only passed to yt-dlp on your machine. They do give access to the YouTube account they belong to, so a separate browser profile signed in to YouTube only is a good idea.
 
@@ -110,8 +112,9 @@ python3 bin/collect.py --out tracks.json --cookies-from-browser firefox
 
 ```sh
 claude plugin validate .           # manifest and hooks module
-claude plugin test .               # hooks/*.test.tsx
-uvx ruff check bin/ && uvx ruff format --check bin/
+claude plugin test .               # hooks/*.test.ts(x): scenes, /fm, the band, mpv's arguments
+python3 -m unittest discover -s tests   # bin/collect.py: OCR fixes, marquee, track list
+uvx ruff check bin/ tests/ && uvx ruff format --check bin/
 bandit -r bin/
 ```
 

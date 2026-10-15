@@ -71,7 +71,7 @@ function base(path: unknown): string {
   return String(path ?? '').split('/').pop() ?? ''
 }
 
-function workOf(tool: string, input: Record<string, unknown>): { kind: WorkName; detail: string } {
+export function workOf(tool: string, input: Record<string, unknown>): { kind: WorkName; detail: string } {
   const firstLine = (v: unknown) => String(v ?? '').split('\n')[0]!.slice(0, 240)
   switch (tool) {
     case 'Bash': return { kind: 'shell', detail: `$ ${firstLine(input.command).replace(/\/home\/[^/\s]+/g, '~')}` }
@@ -171,10 +171,13 @@ function launch($: EngineInterface) {
 }
 
 // Turns mpv's last words into something to act on.
-function explain(said: string): string | null {
+export function explain(said: string): string | null {
   if (/Sign in to confirm/i.test(said)) {
     return 'YouTube asks to sign in: /plugin configure clawd-fm@clawd-fm → Cookies from browser'
   }
+  // A Firefox fork's own name (zen, librewolf) is not a browser yt-dlp knows.
+  const browser = /unsupported browser specified for cookies: "([^"]*)"/.exec(said)
+  if (browser) return `yt-dlp does not know the browser "${browser[1]}": for a Firefox fork use firefox:/path/to/profile`
   if (/429|Too Many Requests/i.test(said)) return 'YouTube rate limit (429)'
   const last = said.split('\n').map(l => l.trim()).filter(l => /error|fail/i.test(l)).pop()
   return last ? last.replace(/^\[[^\]]+\]\s*/, '').slice(0, 120) : null
