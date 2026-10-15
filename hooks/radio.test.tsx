@@ -2,7 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
-import { explain, workOf } from './register'
+import { explain, lastLines, workOf } from './register'
 import { TEXT } from './testing'
 
 const BAND = {
@@ -44,7 +44,11 @@ function world(on: On, w: World = {}) {
   on('session.end', async () => ({ sessionId: 'test' }))
   on('command.register', async ($, e) => ({ value: { command: e.name } }))
   on('settings.read', async () => ({ value: { theme: 'dark' } }))
-  on('ui.blit', async () => ({ value: {} }))
+  let blitted = ''
+  on('ui.blit', async ($, e) => {
+    if ('cells' in e) blitted = String(e.cells)
+    return { value: {} }
+  })
   on('store.get', async ($, e) => ({ value: store.get(e.key) }))
   on('store.set', async ($, e) => {
     store.set(e.key, e.value)
@@ -92,7 +96,9 @@ function world(on: On, w: World = {}) {
   const mpvs = () => spawned.filter(a => a[0] === 'mpv')
   const file = (name: string) => files.get(`${DATA}/${name}`)
   const put = (name: string, text: string) => void files.set(`${DATA}/${name}`, text)
-  return { clock, spawned, mpvs, mpvCalls, store, file, put }
+  // The scene's text as the animation last drew it.
+  const shown = () => TEXT(blitted)
+  return { clock, spawned, mpvs, mpvCalls, store, file, put, shown }
 }
 
 async function start($: Engine) {
@@ -361,5 +367,32 @@ test('the main loop\'s own work still shows as Clawd at work', async ($, on) => 
   const text = await caption($)
   expect(text).toContain('editing main.ts')
   expect(text).not.toContain('helper')
+  await $.command.run(fm('stop'))
+})
+
+test('command output is cleaned up the way a terminal leaves it', async () => {
+  expect(lastLines('one\ntwo\nthree\nfour\n\n', 3)).toEqual(['two', 'three', 'four'])
+  expect(lastLines('\x1b[32m 35 pass\x1b[0m\n', 3)).toEqual([' 35 pass'])
+  expect(lastLines('progress 10%\rprogress 100%\ndone', 3)).toEqual(['progress 100%', 'done'])
+  expect(lastLines('see /home/mikhail/x\tend', 3)).toEqual(['see ~/x  end'])
+  expect(lastLines('', 3)).toEqual([])
+})
+
+test('a finished command shows its real output', async ($, on) => {
+  const { clock, shown } = world(on)
+  on('tool.call', async ($, e) => e.tool === 'Bash'
+    ? { result: { stdout: 'collecting\n\x1b[1m 35 pass\x1b[0m\n 0 fail\n', stderr: '', interrupted: false } as never, text: '' }
+    : { result: 'ok' as never, text: 'ok' })
+  await start($)
+  await $.command.run(fm())
+  await $.tool.call({ tool: 'Bash', tool_use_id: 'b1', command: 'claude plugin test .' })
+  const ui = await $.ui.mount({ plugin: 'clawd-fm', surface: 'terminal', ...BAND, props: { ...BAND.props, bodyColumns: 120 } })
+  // Past the wipe into the shell scene.
+  await clock.advance(2000)
+  const text = shown()
+  await ui.unmount()
+  expect(text).toContain('$ claude plugin test .')
+  expect(text).toContain(' 35 pass')
+  expect(text).toContain(' 0 fail')
   await $.command.run(fm('stop'))
 })

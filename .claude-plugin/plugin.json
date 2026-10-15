@@ -1,6 +1,6 @@
 {
   "name": "clawd-fm",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "description": "Claude FM radio in your terminal: the live stream, volume controls and Clawd scenes above the prompt",
   "author": { "name": "Mikhail Mlhcnn" },
   "repository": "https://github.com/Advnirr/clawd-fm",

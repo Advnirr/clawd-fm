@@ -121,6 +121,10 @@ class Canvas {
   readonly px: (number | null)[]
   // Scenes seen all year dress for it.
   season: Season = 'summer'
+  // What the last command printed, once it finished.
+  output: Output | undefined
+  // How many subagents are at work.
+  helpers = 3
 
   constructor(readonly cols: number, readonly p: Palette) {
     this.cells = Array.from({ length: cols * ROWS }, () => ({ ch: 32, fg: p.ink, bg: NONE }))
@@ -638,7 +642,8 @@ function shell(c: Canvas, t: number, detail: string) {
   for (let i = 0; i < cmd.length && lines.length < 3; i += room) lines.push(cmd.slice(i, i + room))
   const shownLen = lines.join('').length
   const speed = Math.max(1, Math.ceil(shownLen / 10))
-  const typed = Math.min(shownLen, (t % (Math.ceil(shownLen / speed) + 30)) * speed)
+  // Typed again and again while it runs; whole once it has finished.
+  const typed = c.output ? shownLen : Math.min(shownLen, (t % (Math.ceil(shownLen / speed) + 30)) * speed)
   let left = typed
   lines.forEach((line, y) => {
     c.text(x0 + 1, y, line.slice(0, Math.max(0, left)), p.bright, p.screen)
@@ -646,16 +651,18 @@ function shell(c: Canvas, t: number, detail: string) {
   })
   const cy = Math.min(lines.length - 1, Math.floor(typed / room))
   if (typed < shownLen && t % 2) c.put(x0 + 1 + (typed % room), cy, '\u258c', CLAWD, p.screen) // ▌
-  // Output scrolls in the rows the command left free.
-  if (typed === shownLen) {
-    for (let y = lines.length; y < 3; y++) {
-      const line = Math.floor(t / 2) + y
-      const len = Math.floor(noise(line, 20) * (w - 4))
-      let out = ''
-      for (let i = 0; i < len; i++) out += noise(line, i) < 0.2 ? ' ' : 'abcdefghik./-=_'[Math.floor(noise(i, line) * 15)]!
-      c.text(x0 + 1, y, out, noise(line, 21) < 0.15 ? CLAWD : p.dim, p.screen)
-    }
+  if (typed < shownLen) return
+  // The command's real output, in the rows it left free; a cursor while it runs.
+  const out = c.output
+  if (!out) {
+    if (lines.length < 3 && t % 4 < 2) c.put(x0 + 1, lines.length, '\u258c', CLAWD, p.screen) // ▌
+    return
   }
+  const rows = Math.max(1, 3 - lines.length)
+  const shown = (out.lines.length ? out.lines : ['(no output)']).slice(-rows)
+  shown.forEach((line, i) => {
+    c.text(x0 + 1, 3 - rows + i, line.slice(0, room).padEnd(room), out.isError ? CLAWD : p.dim, p.screen)
+  })
 }
 
 function read(c: Canvas, t: number) {
@@ -714,13 +721,23 @@ function web(c: Canvas, t: number) {
   if (t % 21 < 3) c.put(gx + 6, 0, '*', CLAWD)
 }
 
-function agent(c: Canvas, t: number) {
+// Clawd leads a line of helpers back and forth, left of the caption.
+function agent(c: Canvas, t: number, detail: string) {
   const { cols, p } = c
   for (let x = 0; x < cols; x++) c.put(x, 3, noise(x, 50) < 0.2 ? ',' : '_', p.dim)
-  const x = walkerX(cols + 24, t, 2) + 24
+  const room = hasCaption(cols, detail) ? captionX(cols) - 2 : cols
+  // One helper per subagent: Clawd leads, helpers follow 8 px apart.
+  const n = Math.max(1, Math.min(5, c.helpers))
+  const span = Math.max(0, room - (n * 8 + 10))
+  const k = Math.floor(t / 2) % Math.max(1, span * 2)
+  const g = k < span ? k : span * 2 - k
+  const isRight = k < span
   const step = Math.floor(t / 2) % 2
-  c.clawd(step ? WALK_B : WALK_A, x, 1)
-  for (let k = 1; k <= 3; k++) c.sprite((step + k) % 2 ? HELPER_B : HELPER_A, x - k * 8, 2, { o: CLAWD, k: p.eye })
+  c.clawd(step ? WALK_B : WALK_A, isRight ? g + n * 8 : g, 1)
+  for (let i = 0; i < n; i++) {
+    const hx = isRight ? g + (n - 1 - i) * 8 : g + 12 + i * 8
+    c.sprite((step + i) % 2 ? HELPER_B : HELPER_A, hx, 2, { o: CLAWD, k: p.eye })
+  }
 }
 
 // Reactions at the end of a turn or a failed tool.
@@ -772,6 +789,15 @@ function plate(c: Canvas, label: string, t: number) {
   c.put(x0 + 1, 0, '\u266b', CLAWD, c.p.plate) // ♫
 }
 
+// Work captions show on bands this wide, from this column on.
+function hasCaption(cols: number, detail: string): boolean {
+  return detail !== '' && cols >= 60
+}
+
+function captionX(cols: number): number {
+  return Math.max(46, Math.floor(cols * 0.55))
+}
+
 export type FrameOptions = {
   label?: string
   palette?: Palette
@@ -781,11 +807,18 @@ export type FrameOptions = {
   progress?: number
   // Summer when not given.
   season?: Season
+  output?: Output
+  // Subagents at work, for the helpers scene.
+  helpers?: number
 }
 
-function draw(scene: SceneName, cols: number, t: number, palette: Palette, detail: string, season: Season): Canvas {
+export type Output = { lines: readonly string[]; isError: boolean }
+
+function draw(scene: SceneName, cols: number, t: number, palette: Palette, detail: string, o: FrameOptions): Canvas {
   const c = new Canvas(cols, palette)
-  c.season = season
+  c.season = o.season ?? 'summer'
+  c.output = o.output
+  c.helpers = o.helpers ?? 3
   SCENES[scene](c, t, detail)
   return c
 }
@@ -794,10 +827,9 @@ export function frame(scene: SceneName, cols: number, t: number, o: FrameOptions
   cols = Math.max(1, Math.min(512, cols))
   const palette = o.palette ?? DARK
   const detail = o.detail ?? ''
-  const season = o.season ?? 'summer'
-  const c = draw(scene, cols, t, palette, detail, season)
+  const c = draw(scene, cols, t, palette, detail, o)
   if (o.from && o.from !== scene && (o.progress ?? 1) < 1) {
-    const old = draw(o.from, cols, t, palette, '', season)
+    const old = draw(o.from, cols, t, palette, '', { ...o, output: undefined })
     const edge = Math.floor((o.progress ?? 0) * cols)
     for (let x = edge; x < cols; x++) {
       for (let y = 0; y < ROWS; y++) c.cells[y * cols + x] = old.cells[y * cols + x]!
@@ -805,8 +837,8 @@ export function frame(scene: SceneName, cols: number, t: number, o: FrameOptions
     }
   }
   // Caption, except where the scene already shows it.
-  if (detail && scene !== 'shell' && c.cols >= 60) {
-    const x = Math.max(46, Math.floor(c.cols * 0.55))
+  if (hasCaption(c.cols, detail) && scene !== 'shell') {
+    const x = captionX(c.cols)
     const s = detail.slice(0, c.cols - x - 1)
     // The caption is in front: nothing of the scene shows over or through it.
     for (let i = x - 1; i <= Math.min(c.cols - 1, x + s.length); i++) {

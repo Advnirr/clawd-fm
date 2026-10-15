@@ -6,8 +6,8 @@ import { cells, TEXT } from './testing'
 const CLAWD = 0xd97757
 const NONE = 0x01000000
 // The pixel at half-row py, or null where the cell holds no block.
-function pixel(b64: string, cols: number, x: number, py: number): number | null {
-  const { ch, fg, bg } = cells(b64)[Math.floor(py / 2) * cols + x]!
+function pixel(cs: ReturnType<typeof cells>, cols: number, x: number, py: number): number | null {
+  const { ch, fg, bg } = cs[Math.floor(py / 2) * cols + x]!
   if (py % 2 === 0) return ch === 0x2580 ? fg : null
   if (ch === 0x2584) return fg
   return ch === 0x2580 && bg !== NONE ? bg : null
@@ -15,8 +15,9 @@ function pixel(b64: string, cols: number, x: number, py: number): number | null 
 
 // The highest half-row in columns x0..x1 drawn in the color.
 function top(b64: string, cols: number, x0: number, x1: number, color: number): number {
+  const cs = cells(b64)
   for (let py = 0; py < ROWS * 2; py++) {
-    for (let x = x0; x <= x1; x++) if (pixel(b64, cols, x, py) === color) return py
+    for (let x = x0; x <= x1; x++) if (pixel(cs, cols, x, py) === color) return py
   }
   return -1
 }
@@ -144,4 +145,43 @@ test('a caption stays whole while helpers walk past it', async () => {
   for (let t = 0; t < 200; t += 3) {
     for (const scene of ['agent', 'meadow', 'read'] as const) expect(TEXT(frame(scene, 120, t, { detail: caption })), `${scene} at ${t}`).toContain(caption)
   }
+})
+
+test('helpers turn back before the caption, and use the whole band without one', async () => {
+  const cols = 120
+  const detail = 'helper · $ bash -c a very long command that fills the rest of the band'
+  let reachesRight = false
+  for (let t = 0; t < 400; t += 2) {
+    // The caption starts at column 66.
+    expect(top(frame('agent', cols, t, { detail }), cols, 64, cols - 1, CLAWD), `t=${t}`).toBe(-1)
+    if (top(frame('agent', cols, t), cols, 64, cols - 1, CLAWD) >= 0) reachesRight = true
+  }
+  expect(reachesRight).toBe(true)
+})
+
+test('the shell shows real output once the command finished, and no made-up text before', async () => {
+  const running = TEXT(frame('shell', 100, 60, { detail: '$ ls' }))
+  expect(running.replace(/[\s$ls▌▀▄]/g, '')).toBe('')
+  const done = TEXT(frame('shell', 100, 60, { detail: '$ ls', output: { lines: ['a.txt', 'b.txt'], isError: false } }))
+  expect(done).toContain('a.txt')
+  expect(done).toContain('b.txt')
+  // Long commands are shown whole, never retyped over the output.
+  for (const t of [0, 5, 40]) {
+    expect(TEXT(frame('shell', 100, t, { detail: '$ ls', output: { lines: ['a.txt'], isError: false } }))).toContain('a.txt')
+  }
+  expect(TEXT(frame('shell', 100, 3, { detail: '$ true', output: { lines: [], isError: false } }))).toContain('(no output)')
+})
+
+test('one helper walks for each subagent', async () => {
+  // Helpers' eyes sit on half-row 3, two pixels each; Clawd's are higher.
+  const eyes = (n: number) => {
+    const cs = cells(frame('agent', 120, 30, { helpers: n }))
+    let count = 0
+    for (let x = 0; x < 120; x++) if (pixel(cs, 120, x, 3) === DARK.eye) count++
+    return count
+  }
+  expect(eyes(1)).toBe(2)
+  expect(eyes(2)).toBe(4)
+  expect(eyes(5)).toBe(10)
+  expect(eyes(9)).toBe(10)
 })

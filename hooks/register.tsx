@@ -3,7 +3,7 @@ import type { EngineInterface, HookStream, ProcessSpawnChunk, ProcessSpawnResult
 
 import type { Status, Track } from '../types'
 import { DARK, frame, idlePool, LIGHT, ROWS, seasonOf } from './scenes'
-import type { Palette, SceneName, WorkName } from './scenes'
+import type { Output, Palette, SceneName, WorkName } from './scenes'
 
 const STREAM = 'https://www.youtube.com/@claude/live'
 const TICK_MS = 250
@@ -30,17 +30,27 @@ let volumeNow = 50
 // Mirrors of the band, for the animation timer.
 const band = { id: '', cols: 0, scene: 'meadow' as SceneName, working: false, tick: 0, label: '', palette: DARK as Palette }
 // What Claude is doing now, from tool calls.
-type Activity = { kind: WorkName; detail: string; isDone: boolean; shownAt: number | null }
-// Each work scene stays at least this many ticks, so quick tools are still seen.
+type Activity = {
+  kind: WorkName
+  detail: string
+  isDone: boolean
+  shownAt: number | null
+  doneAt: number | null
+  output?: Output
+}
+// Each work scene stays at least this many ticks, so quick tools are still seen,
+// and a command's output this many more once it arrives.
 const HOLD_TICKS = 16
+const OUTPUT_TICKS = 10
 let queue: Activity[] = []
 
+function isOver(a: Activity): boolean {
+  if (!a.isDone || a.shownAt === null || band.tick - a.shownAt < HOLD_TICKS) return false
+  return !a.output || band.tick - (a.doneAt ?? 0) >= OUTPUT_TICKS
+}
+
 function currentWork(): Activity | undefined {
-  while (queue.length > 1 || queue[0]?.isDone) {
-    const head = queue[0]!
-    if (!head.isDone || head.shownAt === null || band.tick - head.shownAt < HOLD_TICKS) break
-    queue.shift()
-  }
+  while ((queue.length > 1 || queue[0]?.isDone) && isOver(queue[0]!)) queue.shift()
   const head = queue[0]
   if (head && head.shownAt === null) head.shownAt = band.tick
   return head
@@ -65,7 +75,8 @@ function helperWork(): { kind: WorkName; detail: string } | undefined {
 }
 
 function bandFrame(cols: number): string {
-  const act = currentWork() ?? helperWork()
+  const own = currentWork()
+  const act = own ?? helperWork()
   const scene = act?.kind ?? (band.working ? 'think' : band.scene)
   if (scene !== wipe.scene) {
     wipe.from = wipe.scene
@@ -75,13 +86,14 @@ function bandFrame(cols: number): string {
   const progress = (band.tick - wipe.at) / WIPE_TICKS
   return frame(scene, cols, band.tick, {
     label: band.label, palette: band.palette, detail: act?.detail ?? '', from: wipe.from, progress, season: seasonOf(new Date()),
+    output: own?.output, helpers: Math.max(1, helpers.size),
   })
 }
 
 // A short reaction scene, shown after whatever is queued.
 function react(kind: 'happy' | 'oops') {
   if (queue.some(a => a.kind === kind && a.shownAt === null)) return
-  queue.push({ kind, detail: '', isDone: true, shownAt: null })
+  queue.push({ kind, detail: '', isDone: true, shownAt: null, doneAt: null })
 }
 
 function base(path: unknown): string {
@@ -269,6 +281,17 @@ function launch($: EngineInterface) {
   startCollector($)
 }
 
+// The last lines a command printed, as a terminal would leave them.
+export function lastLines(text: string, max: number): string[] {
+  return text
+    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '') // colors, cursor moves
+    .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '') // titles, links
+    .split('\n')
+    .map(l => l.split('\r').pop()!.replace(/\t/g, '  ').replace(/[\x00-\x1f\x7f]/g, '').replace(/\/home\/[^/\s]+/g, '~').trimEnd())
+    .filter(l => l !== '')
+    .slice(-max)
+}
+
 // Turns mpv's last words into something to act on.
 export function explain(said: string): string | null {
   if (/Sign in to confirm/i.test(said)) {
@@ -448,16 +471,22 @@ export const register: Register = (on, options) => {
       helpers.set(e.agentId, { detail: work.detail, tick: band.tick })
       return next(e)
     }
-    const act: Activity = { ...work, isDone: false, shownAt: null }
+    const act: Activity = { ...work, isDone: false, shownAt: null, doneAt: null }
     queue.push(act)
     if (queue.length > 4) queue.splice(1, 1) // keep the backlog short
     try {
       const result = await next(e)
-      const r = result as { isError?: boolean; deny?: string }
+      const r = result as { isError?: boolean; deny?: string; result?: unknown }
       if (r.isError || r.deny) react('oops')
+      if (e.tool === 'Bash' && r.result && typeof r.result === 'object') {
+        const { stdout = '', stderr = '' } = r.result as { stdout?: string; stderr?: string }
+        const text = stdout.trim() ? stdout : stderr
+        act.output = { lines: lastLines(text, 3), isError: Boolean(r.isError) || (!stdout.trim() && !!stderr.trim()) }
+      }
       return result
     } finally {
       act.isDone = true
+      act.doneAt = band.tick
     }
   }).catch(($, e, next) => next(e))
 
