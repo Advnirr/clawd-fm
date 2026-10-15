@@ -351,17 +351,18 @@ function train(c: Canvas, t: number) {
     c.pixel(x, 7, 0x8a877c) // rail
   }
   const x0 = 4
-  const bump = t % 10 === 0 ? 1 : 0
+  // A rail joint jolts the locomotive first, then each car behind it.
+  const bump = (i: number) => (t % 10 === i ? 1 : 0)
   const car = ['bbbbbbbbbbbbbbbbbb', 'bwwwwwwwbwwwwwwwbb', 'bwwwwwwwbwwwwwwwbb', 'bwwwwwwwbwwwwwwwbb', 'rrrrrrrrrrrrrrrrrr']
   const colors = { b: 0x8c3a2e, w: 0xe8d8a0, r: 0x5a2a22 }
-  c.sprite(car, x0, 1 + bump, colors)
-  c.sprite(car, x0 + 19, 1, colors)
-  c.sprite(MINI_A, x0 + 20, 2, { o: CLAWD, k: p.eye }) // Clawd at a window
-  c.pixel(x0 + 20, 3, 0xe8d8a0)
-  c.pixel(x0 + 25, 3, 0xe8d8a0)
+  c.sprite(car, x0, 1 + bump(2), colors)
+  c.sprite(car, x0 + 19, 1 + bump(1), colors)
+  c.sprite(MINI_A, x0 + 20, 2 + bump(1), { o: CLAWD, k: p.eye }) // Clawd at a window
+  c.pixel(x0 + 20, 3 + bump(1), 0xe8d8a0)
+  c.pixel(x0 + 25, 3 + bump(1), 0xe8d8a0)
   // Locomotive with a chimney.
   const lx = x0 + 38
-  c.sprite(['..........kk.', 'cccc......kk.', 'cwwcsssssssss', 'ccccssssssssn', 'rrrrrrrrrrrrr'], lx, 1 + bump,
+  c.sprite(['..........kk.', 'cccc......kk.', 'cwwcsssssssss', 'ccccssssssssn', 'rrrrrrrrrrrrr'], lx, 1 + bump(0),
     { k: 0x8a877c, c: 0x8c3a2e, w: 0xe8d8a0, s: 0x5d7a94, n: 0xc0392b, r: 0x5a2a22 })
   // Wheels turn: two frames.
   const spin = t % 2
