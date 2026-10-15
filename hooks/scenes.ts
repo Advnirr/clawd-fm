@@ -804,7 +804,14 @@ export function frame(scene: SceneName, cols: number, t: number, o: FrameOptions
   // Caption, except where the scene already shows it.
   if (detail && scene !== 'shell' && c.cols >= 60) {
     const x = Math.max(46, Math.floor(c.cols * 0.55))
-    c.shimmer(x, 2, detail.slice(0, c.cols - x - 1), t, c.p.dim, 0xf0b08a)
+    const s = detail.slice(0, c.cols - x - 1)
+    // The caption is in front: nothing of the scene shows over or through it.
+    for (let i = x - 1; i <= Math.min(c.cols - 1, x + s.length); i++) {
+      c.put(i, 2, ' ', c.p.dim)
+      c.px[4 * c.cols + i] = null
+      c.px[5 * c.cols + i] = null
+    }
+    c.shimmer(x, 2, s, t, c.p.dim, 0xf0b08a)
   }
   if (o.label) plate(c, o.label, t)
   return c.pack()

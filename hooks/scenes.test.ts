@@ -138,3 +138,10 @@ test('the train passes white hills in winter and green ones in summer', async ()
   expect(hills('winter', 0x3f5a3a)).toBe(-1)
   expect(hills('summer', 0x3f5a3a)).toBeGreaterThan(-1)
 })
+
+test('a caption stays whole while helpers walk past it', async () => {
+  const caption = 'helper · reading notes.txt'
+  for (let t = 0; t < 200; t += 3) {
+    for (const scene of ['agent', 'meadow', 'read'] as const) expect(TEXT(frame(scene, 120, t, { detail: caption })), `${scene} at ${t}`).toContain(caption)
+  }
+})
